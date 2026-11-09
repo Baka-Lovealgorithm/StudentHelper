@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: StudentHelper
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/student_helper?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    hikari:
+      # 关闭连接池的隐式 fail-fast，由 StartupValidator 给出明确的中文错误（AC-113-3）
+      initialization-fail-timeout: -1
+      connection-timeout: 5000
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 45MB
+  sql:
+    init:
+      # 建库脚本由使用者手动执行，应用启动不自动改库
+      mode: never
+  jackson:
+    time-zone: Asia/Shanghai
+
+server:
+  # 本机开发固定 8080；若环境注入了 SERVER__PORT 之类的变量，启动指令需显式带 --server.port=8080
+  port: 8080
+  # 只监听回环地址，服务不对外网/局域网暴露（NFR-105、T-116）
+  address: 127.0.0.1
+
+studenthelper:
+  storage:
+    image-dir: ./data/images
+  chat:
+    sse-timeout-ms: 60000
+    hard-timeout-ms: 45000
+    max-images-per-message: 4
+  crypto:
+    master-key: ${STUDENTHELPER_MASTER_KEY:}
+    master-key-file: ./data/.master_key
+  startup:
+    db-check: ${STUDENTHELPER_DB_CHECK:true}
