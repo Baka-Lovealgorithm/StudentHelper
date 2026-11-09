@@ -4,6 +4,8 @@ export interface SessionItem {
   id: number
   title: string
   guideMode: number
+  /** CR-012：该会话选用的模型条目 id；null 表示回退全局默认。 */
+  modelId: number | null
   createdAt: string
   updatedAt: string
 }
@@ -68,5 +70,14 @@ export async function renameSession(id: number, title: string): Promise<SessionI
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title }),
+  }))
+}
+
+/** CR-012：只切换当前会话选用的模型，不影响其它会话。 */
+export async function setSessionModel(id: number, modelId: number): Promise<SessionItem> {
+  return unwrap<SessionItem>(await fetch(`/api/sessions/${id}/model`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modelId }),
   }))
 }

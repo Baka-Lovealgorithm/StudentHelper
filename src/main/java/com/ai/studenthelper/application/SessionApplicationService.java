@@ -11,6 +11,7 @@ import com.ai.studenthelper.domain.Session;
 import com.ai.studenthelper.infra.persistence.MessageFeedbackRepository;
 import com.ai.studenthelper.infra.persistence.KnowledgePointRepository;
 import com.ai.studenthelper.infra.persistence.MessageRepository;
+import com.ai.studenthelper.infra.persistence.ModelProviderRepository;
 import com.ai.studenthelper.infra.persistence.PracticeRepository;
 import com.ai.studenthelper.infra.persistence.StepUnlockRepository;
 import com.ai.studenthelper.infra.persistence.SessionRepository;
@@ -32,6 +33,7 @@ public class SessionApplicationService {
     private final KnowledgePointRepository knowledgePointRepository;
     private final PracticeRepository practiceRepository;
     private final StepUnlockRepository stepUnlockRepository;
+    private final ModelProviderRepository modelProviderRepository;
 
     public SessionApplicationService(SessionRepository sessionRepository,
                                      MessageRepository messageRepository,
@@ -39,7 +41,8 @@ public class SessionApplicationService {
                                      ImageStorage imageStorage,
                                      KnowledgePointRepository knowledgePointRepository,
                                      PracticeRepository practiceRepository,
-                                     StepUnlockRepository stepUnlockRepository) {
+                                     StepUnlockRepository stepUnlockRepository,
+                                     ModelProviderRepository modelProviderRepository) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
@@ -47,6 +50,7 @@ public class SessionApplicationService {
         this.knowledgePointRepository = knowledgePointRepository;
         this.practiceRepository = practiceRepository;
         this.stepUnlockRepository = stepUnlockRepository;
+        this.modelProviderRepository = modelProviderRepository;
     }
 
     public SessionResponse create(String title) {
@@ -54,6 +58,8 @@ public class SessionApplicationService {
         Session session = new Session();
         session.setTitle(title == null || title.isBlank() ? "新会话" : title.trim());
         session.setGuideMode(0);
+        // CR-012：新会话继承全局默认模型（迁移后为原 is_current 对应条目）
+        session.setModelId(modelProviderRepository.findDefaultModelId());
         session.setCreatedAt(now);
         session.setUpdatedAt(now);
         return toResponse(sessionRepository.save(session));
@@ -86,6 +92,16 @@ public class SessionApplicationService {
             throw new BusinessException(ErrorCode.E1004);
         }
         session.setTitle(normalized);
+        return toResponse(sessionRepository.save(session));
+    }
+
+    /** CR-012：会话级模型选择，只改当前会话、不动 updated_at（不打断列表排序）。 */
+    public SessionResponse setModel(Long id, Long modelId) {
+        Session session = requireSession(id);
+        if (modelId == null || modelProviderRepository.findModel(modelId).isEmpty()) {
+            throw new BusinessException(ErrorCode.E3003, "模型不存在或已被删除");
+        }
+        session.setModelId(modelId);
         return toResponse(sessionRepository.save(session));
     }
 
@@ -137,7 +153,8 @@ public class SessionApplicationService {
     }
 
     private SessionResponse toResponse(Session s) {
-        return new SessionResponse(s.getId(), s.getTitle(), s.getGuideMode(), s.getCreatedAt(), s.getUpdatedAt());
+        return new SessionResponse(s.getId(), s.getTitle(), s.getGuideMode(), s.getModelId(),
+                s.getCreatedAt(), s.getUpdatedAt());
     }
 
     private MessageResponse toResponse(Message m) {

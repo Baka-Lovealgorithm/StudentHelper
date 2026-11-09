@@ -42,3 +42,17 @@ export async function updateSkill(id: number, payload: {
 export async function deleteSkill(id: number): Promise<{ deleted: boolean }> {
   return unwrap<{ deleted: boolean }>(await fetch(`/api/skills/${id}`, { method: 'DELETE' }))
 }
+
+/** CR-011：单独启停，不需要重传名称与正文。 */
+export async function setSkillEnabled(id: number, enabled: boolean): Promise<SkillItem> {
+  return unwrap<SkillItem>(await fetch(`/api/skills/${id}/enabled`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  }))
+}
+
+/** CR-011：浏览器选文件夹上传（files[] + 相对路径 JSON 数组）。 */
+export async function importSkillFolder(form: FormData): Promise<SkillItem> {
+  return unwrap<SkillItem>(await fetch('/api/skills/import', { method: 'POST', body: form }))
+}

@@ -15,6 +15,9 @@ public class Session {
     private String title;
     @Column("guide_mode")
     private Integer guideMode;
+    /** CR-012：会话自己选用的模型条目 id；NULL 时运行时回退全局默认。 */
+    @Column("model_id")
+    private Long modelId;
     @Column("created_at")
     private LocalDateTime createdAt;
     @Column("updated_at")
@@ -26,6 +29,8 @@ public class Session {
     public void setTitle(String title) { this.title = title; }
     public Integer getGuideMode() { return guideMode; }
     public void setGuideMode(Integer guideMode) { this.guideMode = guideMode; }
+    public Long getModelId() { return modelId; }
+    public void setModelId(Long modelId) { this.modelId = modelId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

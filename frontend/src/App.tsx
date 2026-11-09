@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchHealth, type HealthData } from './api/client'
 import { submitQuestion } from './api/chat'
 import {
-  createSession, deleteSession, getSessionDetail, listSessionsPage, renameSession, setGuideMode,
+  createSession, deleteSession, getSessionDetail, listSessionsPage, renameSession,
+  setGuideMode, setSessionModel,
   type SessionDetail, type SessionItem,
 } from './api/session'
 import SessionList from './components/SessionList'
 import Sidebar, { type ViewKey } from './components/Sidebar'
 import ModelConfigPanel from './components/ModelConfigPanel'
+import ModelSelector from './components/ModelSelector'
 import UsagePanel from './components/UsagePanel'
 import Composer, { type ComposerPart } from './components/Composer'
 import SolutionView from './components/SolutionView'
@@ -111,6 +113,13 @@ export default function App() {
     if (currentId === id) {
       setDetail((previous) => previous ? { ...previous, session: renamed } : previous)
     }
+  })
+
+  /** CR-012：切换当前会话的模型，局部更新详情，不重刷消息列表。 */
+  const handleModelChange = (modelId: number) => void guard(async () => {
+    if (!currentId) return
+    const updated = await setSessionModel(currentId, modelId)
+    setDetail((previous) => previous ? { ...previous, session: updated } : previous)
   })
 
   const toggleCollapsed = () => {
@@ -344,6 +353,16 @@ export default function App() {
                       <button type="button" disabled={detail.session.guideMode === 1} onClick={() => handleGuideMode(1)}>仅思路</button>
                     </div>
                   )}
+                </div>
+
+                <div className="chat-model-row">
+                  <ModelSelector
+                    sessionId={currentId}
+                    modelId={detail?.session.modelId ?? null}
+                    onChanged={handleModelChange}
+                    disabled={busy}
+                  />
+                  <span className="muted">切换仅影响当前会话，新会话继承全局默认模型</span>
                 </div>
 
                 <AgentStatusBar stage={stage} busy={busy} error={streamError} timing={timing} />

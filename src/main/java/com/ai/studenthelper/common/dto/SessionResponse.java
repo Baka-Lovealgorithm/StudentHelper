@@ -7,6 +7,7 @@ public record SessionResponse(
         Long id,
         String title,
         Integer guideMode,
+        Long modelId,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

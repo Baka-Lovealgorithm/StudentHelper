@@ -2,6 +2,7 @@ package com.ai.studenthelper.application;
 
 import com.ai.studenthelper.common.BusinessException;
 import com.ai.studenthelper.common.ErrorCode;
+import com.ai.studenthelper.common.SkillFolderParser;
 import com.ai.studenthelper.common.dto.SkillRequest;
 import com.ai.studenthelper.common.dto.SkillResponse;
 import com.ai.studenthelper.domain.enums.S2Feature;
@@ -14,6 +15,8 @@ import java.util.List;
 /**
  * T-302 解题技能（DD-09）：技能是一段 Markdown 指令，启用后注入 System Prompt。
  * 为保证可预测性，注入最多 2 条、每条截断 800 字；关闭开关或无限用时不做任何注入。
+ *
+ * <p>CR-011 新增：从文件夹按 SKILL.md 规范导入（默认停用）、单独启停。
  */
 @Service
 public class SkillApplicationService {
@@ -72,6 +75,33 @@ public class SkillApplicationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.E1004, "技能创建失败"));
     }
 
+    /** CR-011：文件夹导入。校验全部由 SkillFolderParser 承担，入库时固定停用。 */
+    public SkillResponse importFromFolder(List<byte[]> fileBytes, List<String> paths) {
+        features.requireEnabled(S2Feature.SKILL);
+        SkillFolderParser.Parsed parsed = SkillFolderParser.parse(fileBytes, paths);
+        String name = normalizeNameValue(parsed.name());
+        String description = normalizeDescriptionValue(parsed.description());
+        String content = normalizeContentValue(parsed.content());
+        if (repository.nameExists(name, null)) {
+            throw new BusinessException(ErrorCode.E1004, "技能已存在：" + name);
+        }
+        Long id = repository.insert(name, description, content, false);
+        return repository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.E1004, "技能导入失败"));
+    }
+
+    /** CR-011：单独启停，不需要重传名称与正文。 */
+    public SkillResponse setEnabled(Long id, Boolean enabled) {
+        features.requireEnabled(S2Feature.SKILL);
+        requireSkill(id);
+        if (enabled == null) {
+            throw new BusinessException(ErrorCode.E1004, "enabled 不能为空");
+        }
+        repository.setEnabled(id, enabled);
+        return repository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.E1004, "技能不存在"));
+    }
+
     public SkillResponse update(Long id, SkillRequest request) {
         features.requireEnabled(S2Feature.SKILL);
         requireSkill(id);
@@ -100,10 +130,14 @@ public class SkillApplicationService {
     }
 
     private static String normalizeName(SkillRequest request) {
-        if (request == null || request.name() == null || request.name().isBlank()) {
+        return normalizeNameValue(request == null ? null : request.name());
+    }
+
+    private static String normalizeNameValue(String raw) {
+        if (raw == null || raw.isBlank()) {
             throw new BusinessException(ErrorCode.E1004, "技能名称不能为空");
         }
-        String name = request.name().trim();
+        String name = raw.trim();
         if (name.length() > MAX_NAME) {
             throw new BusinessException(ErrorCode.E1004, "技能名称不超过 " + MAX_NAME + " 字");
         }
@@ -111,19 +145,27 @@ public class SkillApplicationService {
     }
 
     private static String normalizeDescription(SkillRequest request) {
-        if (request == null || request.description() == null || request.description().isBlank()) {
+        return normalizeDescriptionValue(request == null ? null : request.description());
+    }
+
+    private static String normalizeDescriptionValue(String raw) {
+        if (raw == null || raw.isBlank()) {
             return null;
         }
-        String description = request.description().trim();
+        String description = raw.trim();
         return description.length() > MAX_DESCRIPTION
                 ? description.substring(0, MAX_DESCRIPTION) : description;
     }
 
     private static String normalizeContent(SkillRequest request) {
-        if (request == null || request.content() == null || request.content().isBlank()) {
+        return normalizeContentValue(request == null ? null : request.content());
+    }
+
+    private static String normalizeContentValue(String raw) {
+        if (raw == null || raw.isBlank()) {
             throw new BusinessException(ErrorCode.E1004, "技能内容不能为空");
         }
-        String content = request.content().trim();
+        String content = raw.trim();
         return content.length() > MAX_CONTENT ? content.substring(0, MAX_CONTENT) : content;
     }
 }

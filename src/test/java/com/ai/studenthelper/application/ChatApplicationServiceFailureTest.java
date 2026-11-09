@@ -70,7 +70,7 @@ class ChatApplicationServiceFailureTest {
     void errorIsEmittedEvenWhenStatusSaveAndCallLogBothFail() {
         ChatCommand command = new ChatCommand(1L, "题目：简述栈的特点", null, 0, List.of());
         when(sessionService.requireSession(1L)).thenReturn(new Session());
-        when(configResolver.resolveCurrent()).thenReturn(new ModelConfigResolver.ResolvedModelConfig(
+        when(configResolver.resolveForSession(1L)).thenReturn(new ModelConfigResolver.ResolvedModelConfig(
                 3L, "http://127.0.0.1:1", "key", "stub", false, true, null));
         // 第一次 save 是用户消息落库，第二次是 handleFailure 里回写 FAILED 状态
         when(messageRepository.save(any(Message.class)))

@@ -57,7 +57,7 @@ public class KnowledgeExtractor {
             if (section == null || section.isBlank()) {
                 return;
             }
-            var config = configResolver.resolveCurrent();
+            var config = configResolver.resolveForSession(sessionId);
             var agent = agentFactory.createNonStreaming(AgentPromptTemplates.KNOWLEDGE_EXTRACT, config);
             Msg prompt = Msg.builder().role(MsgRole.USER).textContent(section).build();
             Msg result = agent.call(List.of(prompt)).block(Duration.ofSeconds(20));

@@ -8,6 +8,7 @@ import com.ai.studenthelper.domain.Session;
 import com.ai.studenthelper.infra.persistence.MessageFeedbackRepository;
 import com.ai.studenthelper.infra.persistence.KnowledgePointRepository;
 import com.ai.studenthelper.infra.persistence.MessageRepository;
+import com.ai.studenthelper.infra.persistence.ModelProviderRepository;
 import com.ai.studenthelper.infra.persistence.PracticeRepository;
 import com.ai.studenthelper.infra.persistence.StepUnlockRepository;
 import com.ai.studenthelper.infra.persistence.SessionRepository;
@@ -43,6 +44,8 @@ class SessionApplicationServiceTest {
     private PracticeRepository practiceRepository;
     @Mock
     private StepUnlockRepository stepUnlockRepository;
+    @Mock
+    private ModelProviderRepository modelProviderRepository;
 
     private SessionApplicationService service;
 
@@ -50,7 +53,7 @@ class SessionApplicationServiceTest {
     void setUp() {
         service = new SessionApplicationService(sessionRepository, messageRepository,
                 feedbackRepository, imageStorage, knowledgePointRepository,
-                practiceRepository, stepUnlockRepository);
+                practiceRepository, stepUnlockRepository, modelProviderRepository);
     }
 
     @Test
@@ -192,5 +195,46 @@ class SessionApplicationServiceTest {
         when(sessionRepository.findById(99L)).thenReturn(Optional.empty());
         BusinessException missing = assertThrows(BusinessException.class, () -> service.rename(99L, "标题"));
         assertEquals(ErrorCode.E1003, missing.getErrorCode());
+    }
+
+    @Test
+    void createInheritsGlobalDefaultModel() {
+        when(modelProviderRepository.findDefaultModelId()).thenReturn(42L);
+        when(sessionRepository.save(any(Session.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.create("新会话");
+
+        assertEquals(42L, response.modelId(), "新会话应继承全局默认模型（CR-012）");
+    }
+
+    @Test
+    void setModelPersistsOnlyCurrentSession() {
+        Session session = new Session();
+        session.setId(6L);
+        session.setTitle("会话 6");
+        LocalDateTime originalUpdatedAt = LocalDateTime.of(2026, 11, 9, 10, 0);
+        session.setUpdatedAt(originalUpdatedAt);
+        when(sessionRepository.findById(6L)).thenReturn(Optional.of(session));
+        when(modelProviderRepository.findModel(42L)).thenReturn(Optional.of(
+                new ModelProviderRepository.ModelRow(42L, 1L, "vision-model", true, true, null, false)));
+        when(sessionRepository.save(any(Session.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.setModel(6L, 42L);
+
+        assertEquals(42L, response.modelId());
+        assertEquals(originalUpdatedAt, response.updatedAt(), "切模型不应打乱会话列表排序");
+        verify(sessionRepository).save(session);
+    }
+
+    @Test
+    void setModelRejectsUnknownModel() {
+        Session session = new Session();
+        session.setId(6L);
+        when(sessionRepository.findById(6L)).thenReturn(Optional.of(session));
+        when(modelProviderRepository.findModel(999L)).thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.setModel(6L, 999L));
+        assertEquals(ErrorCode.E3003, ex.getErrorCode());
+        verify(sessionRepository, never()).save(any(Session.class));
     }
 }

@@ -97,7 +97,7 @@ public class ChatApplicationService {
         try {
             sessionService.requireSession(command.sessionId());
             validate(command);
-            config = configResolver.resolveCurrent();
+            config = configResolver.resolveForSession(command.sessionId());
 
             List<String> paths = new ArrayList<>();
             for (ImagePayload image : command.images()) {

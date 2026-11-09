@@ -12,6 +12,7 @@ import com.ai.studenthelper.domain.enums.AgentStage;
 import com.ai.studenthelper.infra.crypto.ApiKeyCipher;
 import com.ai.studenthelper.infra.persistence.MessageRepository;
 import com.ai.studenthelper.infra.persistence.ModelConfigRepository;
+import com.ai.studenthelper.infra.persistence.ModelProviderRepository;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -78,6 +79,7 @@ class ChatFlowIntegrationTest {
     @Autowired private SessionApplicationService sessionService;
     @Autowired private MessageRepository messageRepository;
     @Autowired private ModelConfigRepository modelConfigRepository;
+    @Autowired private ModelProviderRepository modelProviderRepository;
     @Autowired private ApiKeyCipher apiKeyCipher;
     @Autowired private JdbcTemplate jdbcTemplate;
 
@@ -112,8 +114,8 @@ class ChatFlowIntegrationTest {
     @Test
     void submitStreamsAndPersistsBothMessagesWithHint() {
         STUB_BODY.set(FULL_ANSWER);
-        Long sessionId = sessionService.create("IT-full-flow").id();
         installStubConfig();
+        Long sessionId = sessionService.create("IT-full-flow").id();
 
         RecordingSink sink = new RecordingSink();
         chatService.solve(new ChatCommand(sessionId, "题目：判断栈与队列的性质", "用初学者能懂的话", 0, List.of()), sink);
@@ -148,8 +150,8 @@ class ChatFlowIntegrationTest {
     @Test
     void malformedAnswerReturnsE2005AndArchivesRawOutput() {
         STUB_BODY.set(MALFORMED_ANSWER);
-        Long sessionId = sessionService.create("IT-e2005").id();
         installStubConfig();
+        Long sessionId = sessionService.create("IT-e2005").id();
 
         RecordingSink sink = new RecordingSink();
         chatService.solve(new ChatCommand(sessionId, "题目：六段缺失", null, 0, List.of()), sink);
@@ -181,6 +183,15 @@ class ChatFlowIntegrationTest {
         config.setCreatedAt(now);
         config.setUpdatedAt(now);
         modelConfigRepository.save(config);
+
+        // CR-012 起主链路按「会话模型 → 全局默认」解析新表。测试方法整体在事务内并回滚，
+        // 这里把桩模型设为临时默认，create() 就会让新会话指向桩，绝不触碰真实付费端点。
+        modelProviderRepository.clearDefault();
+        Long providerId = modelProviderRepository.insertProvider("IT-stub-provider",
+                config.getBaseUrl(), config.getApiKeyCipher());
+        Long modelId = modelProviderRepository.insertModel(providerId, "stub-model",
+                false, true, null, false);
+        modelProviderRepository.setDefault(modelId);
     }
 
     private static String buildSse(String answer) {

@@ -80,6 +80,12 @@ public class SkillRepository {
                         .addValue("enabled", enabled == null ? null : (enabled ? 1 : 0)));
     }
 
+    /** CR-011：单独启停，不触碰名称 / 正文；列表按 enabled DESC 自动把启用的排前面。 */
+    public void setEnabled(Long id, boolean enabled) {
+        jdbc.update("UPDATE t_skill SET enabled = :enabled, updated_at = NOW(3) WHERE id = :id",
+                new MapSqlParameterSource().addValue("id", id).addValue("enabled", enabled ? 1 : 0));
+    }
+
     public void delete(Long id) {
         jdbc.update("DELETE FROM t_skill WHERE id = :id", new MapSqlParameterSource("id", id));
     }

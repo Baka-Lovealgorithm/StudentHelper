@@ -5,6 +5,7 @@ import com.ai.studenthelper.common.ApiResponse;
 import com.ai.studenthelper.common.dto.SessionCreateRequest;
 import com.ai.studenthelper.common.dto.SessionDetailResponse;
 import com.ai.studenthelper.common.dto.SessionGuideModeRequest;
+import com.ai.studenthelper.common.dto.SessionModelRequest;
 import com.ai.studenthelper.common.dto.SessionPageResponse;
 import com.ai.studenthelper.common.dto.SessionRenameRequest;
 import com.ai.studenthelper.common.dto.SessionResponse;
@@ -80,5 +81,12 @@ public class SessionController {
     public ApiResponse<SessionResponse> rename(@PathVariable Long id,
                                                @Valid @RequestBody SessionRenameRequest request) {
         return ApiResponse.ok(service.rename(id, request.title()));
+    }
+
+    /** CR-012：只切换当前会话选用的模型条目，不影响其它会话。 */
+    @PatchMapping("/sessions/{id}/model")
+    public ApiResponse<SessionResponse> setModel(@PathVariable Long id,
+                                                 @RequestBody(required = false) SessionModelRequest request) {
+        return ApiResponse.ok(service.setModel(id, request == null ? null : request.modelId()));
     }
 }
