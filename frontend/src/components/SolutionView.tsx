@@ -17,6 +17,21 @@ interface Section {
 }
 
 const MARKERS = ['①', '②', '③', '④', '⑤', '⑥', '⑦']
+const DISCLAIMER = '本内容由 AI 生成，请自行核对'
+
+/**
+ * 后端落库时会在末尾追加提示行（可能因模型模仿而重复多次）。
+ * 这里先剥掉，再由组件统一渲染一次，否则正文会渲染一遍、底部再渲染一遍。
+ */
+function splitDisclaimer(content: string): { body: string; hasDisclaimer: boolean } {
+  let body = content.trim()
+  let has = false
+  while (body.endsWith(DISCLAIMER)) {
+    has = true
+    body = body.slice(0, body.length - DISCLAIMER.length).trim()
+  }
+  return { body, hasDisclaimer: has }
+}
 
 function splitSections(content: string): { prefix: string; sections: Section[] } {
   const lines = content.split('\n')
@@ -52,7 +67,8 @@ function Markdown({ text }: { text: string }) {
 export default function SolutionView({
   content, streaming = false, stepUnlockEnabled = false, messageId,
 }: Props) {
-  const { prefix, sections } = splitSections(content)
+  const { body, hasDisclaimer } = splitDisclaimer(content)
+  const { prefix, sections } = splitSections(body)
   const [unlocked, setUnlocked] = useState(3)
 
   useEffect(() => {
@@ -105,9 +121,7 @@ export default function SolutionView({
           )}
         </div>
       )}
-      {content.includes('本内容由 AI 生成，请自行核对') && (
-        <p className="disclaimer">本内容由 AI 生成，请自行核对</p>
-      )}
+      {hasDisclaimer && <p className="disclaimer">{DISCLAIMER}</p>}
       {streaming && <span className="cursor">▍</span>}
     </div>
   )
