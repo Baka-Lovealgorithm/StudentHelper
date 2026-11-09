@@ -77,6 +77,18 @@ public class PracticeRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    /** 删除会话时清理练习记录，避免孤儿行（Gate-2 级联复跑）。 */
+    public void deleteBySessionId(Long sessionId) {
+        jdbc.update("DELETE FROM t_practice WHERE session_id = :session",
+                new MapSqlParameterSource("session", sessionId));
+    }
+
+    /** 删除单条消息时清理以该助手消息为来源的练习记录。 */
+    public void deleteBySourceMessageId(Long messageId) {
+        jdbc.update("DELETE FROM t_practice WHERE source_message_id = :message",
+                new MapSqlParameterSource("message", messageId));
+    }
+
     private static PracticeResponse map(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new PracticeResponse(
                 rs.getLong("id"),

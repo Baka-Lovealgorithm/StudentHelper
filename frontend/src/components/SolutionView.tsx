@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { getUnlockState, unlockStep } from '../api/stepUnlock'
 
 // Markdown / KaTeX 依赖较重，拆成独立 chunk，首屏只下载答题界面骨架（TCR-010）。
 const MarkdownRenderer = lazy(() => import('./MarkdownRenderer'))
@@ -6,6 +7,8 @@ const MarkdownRenderer = lazy(() => import('./MarkdownRenderer'))
 interface Props {
   content: string
   streaming?: boolean
+  stepUnlockEnabled?: boolean
+  messageId?: number
 }
 
 interface Section {
@@ -44,12 +47,40 @@ function Markdown({ text }: { text: string }) {
   )
 }
 
-export default function SolutionView({ content, streaming = false }: Props) {
+export default function SolutionView({
+  content, streaming = false, stepUnlockEnabled = false, messageId,
+}: Props) {
   const { prefix, sections } = splitSections(content)
+  const [unlocked, setUnlocked] = useState(3)
+
+  useEffect(() => {
+    if (!stepUnlockEnabled || streaming || !messageId) {
+      setUnlocked(3)
+      return
+    }
+    let active = true
+    void getUnlockState(messageId)
+      .then((state) => { if (active) setUnlocked(state.unlockedStep) })
+      .catch(() => { if (active) setUnlocked(1) })
+    return () => { active = false }
+  }, [stepUnlockEnabled, streaming, messageId])
+
+  const gated = stepUnlockEnabled && !streaming && sections.length > 3
+  const visible = gated
+    ? sections.filter((_, index) => index < 3 || (index === 3 ? unlocked >= 2 : unlocked >= 3))
+    : sections
+  const doUnlock = () => void (async () => {
+    if (!messageId) return
+    try {
+      const state = await unlockStep(messageId, Math.min(3, unlocked + 1))
+      setUnlocked(state.unlockedStep)
+    } catch { /* 保持当前解锁状态 */ }
+  })()
+
   return (
     <div className={streaming ? 'solution streaming' : 'solution'}>
       {prefix && <Markdown text={prefix} />}
-      {sections.map((section) => (
+      {visible.map((section) => (
         <section key={section.title} className="solution-section">
           <h4>{section.title}</h4>
           <Markdown text={section.body.trim()} />
@@ -64,6 +95,14 @@ export default function SolutionView({ content, streaming = false }: Props) {
           )}
         </section>
       ))}
+      {gated && (
+        <div className="unlock-bar">
+          <span className="muted">当前解锁：第 {unlocked} 级（1=思路 2=关键步骤 3=答案）</span>
+          {unlocked < 3 && (
+            <button type="button" className="btn small" onClick={doUnlock}>解锁下一步</button>
+          )}
+        </div>
+      )}
       {content.includes('本内容由 AI 生成，请自行核对') && (
         <p className="disclaimer">本内容由 AI 生成，请自行核对</p>
       )}

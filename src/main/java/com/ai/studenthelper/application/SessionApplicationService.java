@@ -10,6 +10,8 @@ import com.ai.studenthelper.domain.Session;
 import com.ai.studenthelper.infra.persistence.MessageFeedbackRepository;
 import com.ai.studenthelper.infra.persistence.KnowledgePointRepository;
 import com.ai.studenthelper.infra.persistence.MessageRepository;
+import com.ai.studenthelper.infra.persistence.PracticeRepository;
+import com.ai.studenthelper.infra.persistence.StepUnlockRepository;
 import com.ai.studenthelper.infra.persistence.SessionRepository;
 import com.ai.studenthelper.infra.storage.ImageStorage;
 import org.springframework.stereotype.Service;
@@ -27,17 +29,23 @@ public class SessionApplicationService {
     private final MessageFeedbackRepository feedbackRepository;
     private final ImageStorage imageStorage;
     private final KnowledgePointRepository knowledgePointRepository;
+    private final PracticeRepository practiceRepository;
+    private final StepUnlockRepository stepUnlockRepository;
 
     public SessionApplicationService(SessionRepository sessionRepository,
                                      MessageRepository messageRepository,
                                      MessageFeedbackRepository feedbackRepository,
                                      ImageStorage imageStorage,
-                                     KnowledgePointRepository knowledgePointRepository) {
+                                     KnowledgePointRepository knowledgePointRepository,
+                                     PracticeRepository practiceRepository,
+                                     StepUnlockRepository stepUnlockRepository) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
         this.imageStorage = imageStorage;
         this.knowledgePointRepository = knowledgePointRepository;
+        this.practiceRepository = practiceRepository;
+        this.stepUnlockRepository = stepUnlockRepository;
     }
 
     public SessionResponse create(String title) {
@@ -67,6 +75,9 @@ public class SessionApplicationService {
         // S2：反馈标记随会话级联清理，避免孤儿行（AC-202-3 / AC-207-4）
         feedbackRepository.deleteBySessionId(id);
         knowledgePointRepository.removeSessionHits(id);
+        // Gate-2 复跑发现：t_practice / t_step_unlock 曾残留，现一并清理（AC-202-3 / AC-209-x）
+        practiceRepository.deleteBySessionId(id);
+        stepUnlockRepository.deleteBySessionId(id);
         messageRepository.deleteBySessionId(id);
         sessionRepository.deleteById(id);
         imageStorage.deleteSessionDir(id);
@@ -76,6 +87,8 @@ public class SessionApplicationService {
     public void deleteMessage(Long id) {
         feedbackRepository.deleteByMessageId(id);
         knowledgePointRepository.removeMessageHits(id);
+        practiceRepository.deleteBySourceMessageId(id);
+        stepUnlockRepository.deleteByMessageId(id);
         messageRepository.deleteById(id);
     }
 

@@ -8,6 +8,8 @@ import com.ai.studenthelper.domain.Session;
 import com.ai.studenthelper.infra.persistence.MessageFeedbackRepository;
 import com.ai.studenthelper.infra.persistence.KnowledgePointRepository;
 import com.ai.studenthelper.infra.persistence.MessageRepository;
+import com.ai.studenthelper.infra.persistence.PracticeRepository;
+import com.ai.studenthelper.infra.persistence.StepUnlockRepository;
 import com.ai.studenthelper.infra.persistence.SessionRepository;
 import com.ai.studenthelper.infra.storage.ImageStorage;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,13 +39,18 @@ class SessionApplicationServiceTest {
     private ImageStorage imageStorage;
     @Mock
     private KnowledgePointRepository knowledgePointRepository;
+    @Mock
+    private PracticeRepository practiceRepository;
+    @Mock
+    private StepUnlockRepository stepUnlockRepository;
 
     private SessionApplicationService service;
 
     @BeforeEach
     void setUp() {
         service = new SessionApplicationService(sessionRepository, messageRepository,
-                feedbackRepository, imageStorage, knowledgePointRepository);
+                feedbackRepository, imageStorage, knowledgePointRepository,
+                practiceRepository, stepUnlockRepository);
     }
 
     @Test

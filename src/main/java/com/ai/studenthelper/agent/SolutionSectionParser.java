@@ -22,20 +22,24 @@ public class SolutionSectionParser {
         if (text == null || text.isBlank()) {
             throw new BusinessException(ErrorCode.E2005);
         }
+        // T-204：开启可选段落时，「## 补充：」之后的内容不参与 ①~⑥ 校验，
+        // 避免 ⑥ 段混入补充内容而误判；落库仍保留完整原文。
+        int optionalAt = text.indexOf("\n## 补充：");
+        String core = optionalAt > 0 ? text.substring(0, optionalAt) : text;
         List<String> titles = SolverPromptTemplate.titlesFor(mode);
         List<Section> sections = new ArrayList<>();
         for (int i = 0; i < titles.size(); i++) {
             String title = titles.get(i);
-            int start = text.indexOf(title);
+            int start = core.indexOf(title);
             if (start < 0) {
                 throw new BusinessException(ErrorCode.E2005, "缺少段落：" + title);
             }
             int bodyStart = start + title.length();
-            int end = (i + 1 < titles.size()) ? text.indexOf(titles.get(i + 1), bodyStart) : text.length();
+            int end = (i + 1 < titles.size()) ? core.indexOf(titles.get(i + 1), bodyStart) : core.length();
             if (end < bodyStart) {
                 throw new BusinessException(ErrorCode.E2005, "段落顺序错误：" + title);
             }
-            String body = text.substring(bodyStart, end).trim();
+            String body = core.substring(bodyStart, end).trim();
             if (body.isEmpty()) {
                 throw new BusinessException(ErrorCode.E2005, "段落内容为空：" + title);
             }

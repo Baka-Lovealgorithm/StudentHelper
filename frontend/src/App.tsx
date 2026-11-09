@@ -16,6 +16,9 @@ import FeaturePanel from './components/FeaturePanel'
 import { listFeatures } from './api/features'
 import KnowledgePanel from './components/KnowledgePanel'
 import PracticeCard from './components/PracticeCard'
+import ProfilePanel from './components/ProfilePanel'
+import WrongBookPanel from './components/WrongBookPanel'
+import { markWrong } from './api/wrongBook'
 
 const STORAGE_KEY = 'studenthelper.currentSessionId'
 
@@ -31,7 +34,7 @@ interface StreamEventData {
 }
 
 export default function App() {
-  const [view, setView] = useState<'chat' | 'config' | 'usage' | 'features' | 'knowledge'>('chat')
+  const [view, setView] = useState<'chat' | 'config' | 'usage' | 'features' | 'knowledge' | 'profile' | 'wrongBook'>('chat')
   /** 当前展开「举一反三」卡片的助手消息 id（T-205）。 */
   const [practiceFor, setPracticeFor] = useState<number | null>(null)
   /** S2 开关快照（DD-01），默认空对象即全部关闭。 */
@@ -61,6 +64,8 @@ export default function App() {
     setFeatures(snapshot)
     if (!snapshot.usagePanel) setView((v) => (v === 'usage' ? 'chat' : v))
     if (!snapshot.knowledgeExtract) setView((v) => (v === 'knowledge' ? 'chat' : v))
+    if (!snapshot.memory) setView((v) => (v === 'profile' ? 'chat' : v))
+    if (!snapshot.wrongBook) setView((v) => (v === 'wrongBook' ? 'chat' : v))
   }, [])
 
   const openSession = useCallback(async (id: number) => {
@@ -243,6 +248,12 @@ export default function App() {
           {features.knowledgeExtract && (
             <button type="button" className={view === 'knowledge' ? 'active' : ''} onClick={() => setView('knowledge')}>知识点</button>
           )}
+          {features.memory && (
+            <button type="button" className={view === 'profile' ? 'active' : ''} onClick={() => setView('profile')}>记忆画像</button>
+          )}
+          {features.wrongBook && (
+            <button type="button" className={view === 'wrongBook' ? 'active' : ''} onClick={() => setView('wrongBook')}>错题本</button>
+          )}
           <button type="button" className={view === 'features' ? 'active' : ''} onClick={() => setView('features')}>功能开关</button>
         </nav>
       </header>
@@ -262,6 +273,9 @@ export default function App() {
           {error && <p className="error banner">操作失败：{error}</p>}
 
           {view === 'features' ? <FeaturePanel onChange={syncFeatures} />
+            : view === 'profile' && features.memory ? <ProfilePanel />
+            : view === 'wrongBook' && features.wrongBook
+              ? <WrongBookPanel onOpenSession={(id) => void guard(() => openSession(id))} />
             : view === 'knowledge' && features.knowledgeExtract ? <KnowledgePanel />
             : view === 'usage' && features.usagePanel ? <UsagePanel />
             : view === 'config' ? <ModelConfigPanel /> : (
@@ -296,7 +310,7 @@ export default function App() {
                                 <summary>生成结果格式异常，点击查看模型原始输出</summary>
                                 <pre>{message.content ?? ''}</pre>
                               </details>
-                            : <SolutionView content={message.content ?? ''} />)
+                            : <SolutionView content={message.content ?? ''} stepUnlockEnabled={features.stepUnlock} messageId={message.id} />)
                         : <p>{message.content ?? '（无文本内容）'}</p>}
                       {features.feedback && message.role === 'ASSISTANT' && message.status !== 'FAILED' && (
                         <div className="message-actions">
@@ -327,6 +341,22 @@ export default function App() {
                             onClick={() => setPracticeFor(practiceFor === message.id ? null : message.id)}
                           >
                             {practiceFor === message.id ? '收起练习' : '举一反三'}
+                          </button>
+                        </div>
+                      )}
+                      {features.wrongBook && message.role === 'ASSISTANT' && message.status !== 'FAILED' && index > 0 && (
+                        <div className="message-actions">
+                          <button
+                            type="button"
+                            className="btn small"
+                            onClick={() => {
+                              const source = detail?.messages[index - 1]
+                              if (source) void guard(async () => {
+                                await markWrong(source.id, '数据结构')
+                              })
+                            }}
+                          >
+                            加入错题本
                           </button>
                         </div>
                       )}

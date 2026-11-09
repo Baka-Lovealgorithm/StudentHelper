@@ -249,3 +249,16 @@ code { font-size: 12px; word-break: break-all; }
 .practice-result.fail strong { color: #b91c1c; }
 .practice-result p { flex-basis: 100%; margin: 4px 0 0; color: #475569; }
 
+/* T-201 / T-202 / T-204 / T-209 */
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.profile-raw { background: var(--panel-soft, #f6f7f9); border-radius: 8px; padding: 10px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 13px; }
+.field input, .field select, .field textarea { font: inherit; padding: 6px 8px; border: 1px solid #d9dde3; border-radius: 6px; }
+.filter-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+.filter-row .field { margin: 0; }
+.plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.plain-list li { border-bottom: 1px solid #eceff3; padding-bottom: 8px; }
+.tag { display: inline-block; font-size: 11px; border: 1px solid #d9dde3; border-radius: 4px; padding: 1px 5px; margin-right: 6px; }
+.wrong-item { line-height: 1.6; }
+.sub-options { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 0 10px 26px; font-size: 13px; }
+.unlock-bar { display: flex; align-items: center; gap: 12px; border-top: 1px dashed #d9dde3; padding-top: 10px; margin-top: 10px; }

@@ -5,6 +5,7 @@ import com.ai.studenthelper.agent.KnowledgeExtractor;
 import com.ai.studenthelper.agent.SolutionSectionParser;
 import com.ai.studenthelper.agent.SolverAgentFactory;
 import com.ai.studenthelper.agent.SolverPromptTemplate;
+import com.ai.studenthelper.agent.S2PromptAugmenter;
 import com.ai.studenthelper.common.dto.ChatCommand;
 import com.ai.studenthelper.common.dto.DonePayload;
 import com.ai.studenthelper.common.dto.ImagePayload;
@@ -58,6 +59,7 @@ public class ChatApplicationService {
     private final RawAnswerArchiver rawAnswerArchiver;
     private final KnowledgeExtractor knowledgeExtractor;
     private final AppProperties properties;
+    private final S2PromptAugmenter promptAugmenter;
 
     public ChatApplicationService(SessionApplicationService sessionService,
                                   MessageRepository messageRepository,
@@ -69,7 +71,8 @@ public class ChatApplicationService {
                                   CallLogRecorder logRecorder,
                                   RawAnswerArchiver rawAnswerArchiver,
                                   KnowledgeExtractor knowledgeExtractor,
-                                  AppProperties properties) {
+                                  AppProperties properties,
+                                  S2PromptAugmenter promptAugmenter) {
         this.sessionService = sessionService;
         this.messageRepository = messageRepository;
         this.imageStorage = imageStorage;
@@ -81,6 +84,7 @@ public class ChatApplicationService {
         this.rawAnswerArchiver = rawAnswerArchiver;
         this.knowledgeExtractor = knowledgeExtractor;
         this.properties = properties;
+        this.promptAugmenter = promptAugmenter;
     }
 
     public void solve(ChatCommand command, SolutionStreamSink sink) {
@@ -107,7 +111,8 @@ public class ChatApplicationService {
 
             sink.onStatus(AgentStage.UNDERSTANDING);
             GuideMode mode = GuideMode.fromCode(command.guideMode());
-            String systemPrompt = SolverPromptTemplate.build(mode);
+            // 关闭态 augment 原样返回，保证 AC-204-1 与 Gate-2 关闭态逐字一致
+            String systemPrompt = promptAugmenter.augment(SolverPromptTemplate.build(mode));
             List<Message> history = messageRepository.findBySessionId(command.sessionId());
             List<Msg> messages = contextAssembler.assemble(history, command.text(), command.hint(), command.images());
             var agent = agentFactory.create(systemPrompt, config);

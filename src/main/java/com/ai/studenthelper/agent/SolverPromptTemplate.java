@@ -42,4 +42,34 @@ public final class SolverPromptTemplate {
         }
         return sb.toString();
     }
+
+    /** T-201：跨会话偏好的 Prompt 增量；仅 MEMORY 开关开启且有记忆时追加。 */
+    public static String memoryBlock(List<String> memories) {
+        StringBuilder block = new StringBuilder(
+                "\n【用户长期偏好】（跨会话生效，优先级低于本轮题目与难度要求）\n");
+        for (String memory : memories) {
+            block.append("- ").append(memory).append('\n');
+        }
+        block.append("请在不违背题意的前提下贴合这些偏好，不要复述本段、不要据此编造题目信息。\n");
+        return block.toString();
+    }
+
+    /** T-204：可选补充段落的 Prompt 增量；标题不带圈号，避开 ⑦ 禁用段。 */
+    public static String optionalSectionBlock(boolean idea, boolean knowledge, boolean code) {
+        StringBuilder block = new StringBuilder(
+                "\n【补充段落】在 ⑥ 之后追加下列标题，标题必须逐字一致、每个标题下写非空内容；"
+                        + "不得改动 ①~⑥ 的标题、顺序与内容：\n");
+        if (idea) {
+            block.append("## 补充：思路详解\n");
+        }
+        if (knowledge) {
+            block.append("## 补充：知识点清单\n");
+        }
+        if (code) {
+            block.append("## 补充：参考代码\n");
+        }
+        block.append("只输出上面列出的补充段落；代码块用 Markdown 围栏包裹、不要执行；"
+                + "不要输出 ⑦ 举一反三内容。\n");
+        return block.toString();
+    }
 }

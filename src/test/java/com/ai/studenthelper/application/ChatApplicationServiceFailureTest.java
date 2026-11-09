@@ -3,6 +3,7 @@ package com.ai.studenthelper.application;
 import com.ai.studenthelper.agent.ChatContextAssembler;
 import com.ai.studenthelper.agent.KnowledgeExtractor;
 import com.ai.studenthelper.agent.SolutionSectionParser;
+import com.ai.studenthelper.agent.S2PromptAugmenter;
 import com.ai.studenthelper.agent.SolverAgentFactory;
 import com.ai.studenthelper.common.ErrorCode;
 import com.ai.studenthelper.common.dto.ChatCommand;
@@ -51,6 +52,7 @@ class ChatApplicationServiceFailureTest {
     @Mock private RawAnswerArchiver rawAnswerArchiver;
     @Mock private KnowledgeExtractor knowledgeExtractor;
     @Mock private SolutionStreamSink sink;
+    @Mock private S2PromptAugmenter promptAugmenter;
 
     private ChatApplicationService service;
 
@@ -58,7 +60,10 @@ class ChatApplicationServiceFailureTest {
     void setUp() {
         service = new ChatApplicationService(sessionService, messageRepository, imageStorage,
                 configResolver, agentFactory, contextAssembler, parser, logRecorder,
-                rawAnswerArchiver, knowledgeExtractor, new AppProperties());
+                rawAnswerArchiver, knowledgeExtractor, new AppProperties(), promptAugmenter);
+        org.mockito.Mockito.lenient()
+                .when(promptAugmenter.augment(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
