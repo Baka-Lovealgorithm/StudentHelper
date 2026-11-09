@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchHealth, type HealthData } from './api/client'
 import { submitQuestion } from './api/chat'
 import {
-  createSession, deleteSession, getSessionDetail, listSessions, setGuideMode,
+  createSession, deleteSession, getSessionDetail, listSessionsPage, renameSession, setGuideMode,
   type SessionDetail, type SessionItem,
 } from './api/session'
 import SessionList from './components/SessionList'
+import Sidebar, { type ViewKey } from './components/Sidebar'
 import ModelConfigPanel from './components/ModelConfigPanel'
 import UsagePanel from './components/UsagePanel'
 import Composer, { type ComposerPart } from './components/Composer'
@@ -25,6 +26,8 @@ import WrongBookPanel from './components/WrongBookPanel'
 import { markWrong } from './api/wrongBook'
 
 const STORAGE_KEY = 'studenthelper.currentSessionId'
+const SIDEBAR_KEY = 'studenthelper.sidebarCollapsed'
+const PAGE_SIZE = 10
 
 interface StreamEventData {
   stage?: string
@@ -38,12 +41,18 @@ interface StreamEventData {
 }
 
 export default function App() {
-  const [view, setView] = useState<'chat' | 'config' | 'usage' | 'features' | 'knowledge' | 'profile' | 'wrongBook' | 'subject' | 'skill' | 'mcp' | 'stats'>('chat')
+  const [view, setView] = useState<ViewKey>('chat')
+  /** 侧边栏收起状态，刷新后保留。 */
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === '1')
+  /** 会话列表分批加载：首屏 PAGE_SIZE 条，只提供「加载更多」，不做页码跳转。 */
+  const [sessions, setSessions] = useState<SessionItem[]>([])
+  const [sessionPage, setSessionPage] = useState(0)
+  const [hasMoreSessions, setHasMoreSessions] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   /** 当前展开「举一反三」卡片的助手消息 id（T-205）。 */
   const [practiceFor, setPracticeFor] = useState<number | null>(null)
   /** S2 开关快照（DD-01），默认空对象即全部关闭。 */
   const [features, setFeatures] = useState<Record<string, boolean>>({})
-  const [sessions, setSessions] = useState<SessionItem[]>([])
   const [currentId, setCurrentId] = useState<number | null>(() => {
     const raw = localStorage.getItem(STORAGE_KEY)
     return raw ? Number(raw) : null
@@ -59,9 +68,57 @@ export default function App() {
   /** 已标记「有误」的消息 id（T-207），用于按钮去重与禁用。 */
   const [markedIds, setMarkedIds] = useState<Set<number>>(new Set())
 
+  /** 统一错误处理：业务异常显示到主区顶部横幅，不中断页面。 */
+  const guard = async (action: () => Promise<void>) => {
+    try {
+      setError(null)
+      await action()
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  /** 重新拉取首屏（新建 / 删除后调用），回到第 0 页。 */
   const refreshSessions = useCallback(async () => {
-    setSessions(await listSessions())
+    const first = await listSessionsPage(0, PAGE_SIZE)
+    setSessions(first.items)
+    setSessionPage(0)
+    setHasMoreSessions(first.hasMore)
   }, [])
+
+  /** 「加载更多」：追加下一批，按 id 去重，避免新建会话后翻页造成重复。 */
+  const loadMoreSessions = () => void guard(async () => {
+    if (loadingMore || !hasMoreSessions) return
+    setLoadingMore(true)
+    try {
+      const next = sessionPage + 1
+      const page = await listSessionsPage(next, PAGE_SIZE)
+      setSessions((previous) => {
+        const seen = new Set(previous.map((item) => item.id))
+        return [...previous, ...page.items.filter((item) => !seen.has(item.id))]
+      })
+      setSessionPage(next)
+      setHasMoreSessions(page.hasMore)
+    } finally {
+      setLoadingMore(false)
+    }
+  })
+
+  /** 重命名：局部更新列表与当前会话标题，不整页刷新，保持已加载的批次。 */
+  const handleRename = (id: number, title: string) => void guard(async () => {
+    const renamed = await renameSession(id, title)
+    setSessions((previous) => previous.map((item) => (item.id === id ? renamed : item)))
+    if (currentId === id) {
+      setDetail((previous) => previous ? { ...previous, session: renamed } : previous)
+    }
+  })
+
+  const toggleCollapsed = () => {
+    setCollapsed((previous) => {
+      localStorage.setItem(SIDEBAR_KEY, previous ? '0' : '1')
+      return !previous
+    })
+  }
 
   /** 稳定引用，避免 FeaturePanel 的 useEffect 因回调变化反复请求。 */
   const syncFeatures = useCallback((snapshot: Record<string, boolean>) => {
@@ -109,15 +166,6 @@ export default function App() {
     // 首次挂载恢复上次会话
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const guard = async (action: () => Promise<void>) => {
-    try {
-      setError(null)
-      await action()
-    } catch (e) {
-      setError(String(e))
-    }
-  }
 
   const handleCreate = () => void guard(async () => {
     const created = await createSession()
@@ -238,56 +286,38 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <header className="topbar">
         <div>
           <h1>大学生解题助手</h1>
           <span className="subtitle">S1 + S2 首批 · 解题主链路（数据结构）</span>
         </div>
-        <nav>
-          <span className={`conn ${health ? 'up' : 'down'}`} title={health ? `${health.app} ${health.status}` : '后端未连接'}>
-            {health ? '后端已连接' : '后端未连接'}
-          </span>
-          <button type="button" className={view === 'chat' ? 'active' : ''} onClick={() => setView('chat')}>会话</button>
-          {features.usagePanel && (
-            <button type="button" className={view === 'usage' ? 'active' : ''} onClick={() => setView('usage')}>用量看板</button>
-          )}
-          <button type="button" className={view === 'config' ? 'active' : ''} onClick={() => setView('config')}>模型配置</button>
-          {features.knowledgeExtract && (
-            <button type="button" className={view === 'knowledge' ? 'active' : ''} onClick={() => setView('knowledge')}>知识点</button>
-          )}
-          {features.memory && (
-            <button type="button" className={view === 'profile' ? 'active' : ''} onClick={() => setView('profile')}>记忆画像</button>
-          )}
-          {features.wrongBook && (
-            <button type="button" className={view === 'wrongBook' ? 'active' : ''} onClick={() => setView('wrongBook')}>错题本</button>
-          )}
-          {features.learningStats && (
-            <button type="button" className={view === 'stats' ? 'active' : ''} onClick={() => setView('stats')}>学情统计</button>
-          )}
-          {features.subjectTemplate && (
-            <button type="button" className={view === 'subject' ? 'active' : ''} onClick={() => setView('subject')}>学科</button>
-          )}
-          {features.skill && (
-            <button type="button" className={view === 'skill' ? 'active' : ''} onClick={() => setView('skill')}>技能</button>
-          )}
-          {features.mcp && (
-            <button type="button" className={view === 'mcp' ? 'active' : ''} onClick={() => setView('mcp')}>MCP 工具</button>
-          )}
-          <button type="button" className={view === 'features' ? 'active' : ''} onClick={() => setView('features')}>功能开关</button>
-        </nav>
+        <span className={`conn ${health ? 'up' : 'down'}`} title={health ? `${health.app} ${health.status}` : '后端未连接'}>
+          {health ? '后端已连接' : '后端未连接'}
+        </span>
       </header>
 
       <div className="layout">
-        <aside className="sidebar">
-          <SessionList
-            sessions={sessions}
-            currentId={currentId}
-            onCreate={handleCreate}
-            onSelect={(id) => void guard(() => openSession(id))}
-            onDelete={handleDelete}
-          />
-        </aside>
+        <Sidebar
+          view={view}
+          onViewChange={setView}
+          features={features}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+          sessionSlot={
+            <SessionList
+              sessions={sessions}
+              currentId={currentId}
+              hasMore={hasMoreSessions}
+              loadingMore={loadingMore}
+              onCreate={handleCreate}
+              onSelect={(id) => void guard(() => openSession(id))}
+              onDelete={handleDelete}
+              onRename={handleRename}
+              onLoadMore={loadMoreSessions}
+            />
+          }
+        />
 
         <main className="workspace">
           {error && <p className="error banner">操作失败：{error}</p>}

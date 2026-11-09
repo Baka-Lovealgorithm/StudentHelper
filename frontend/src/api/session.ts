@@ -24,8 +24,19 @@ export interface SessionDetail {
   messages: MessageItem[]
 }
 
+/** 分页结果：只带 total / hasMore，不提供页码跳转。 */
+export interface SessionPage {
+  items: SessionItem[]
+  total: number
+  hasMore: boolean
+}
+
 export async function listSessions(): Promise<SessionItem[]> {
   return unwrap<SessionItem[]>(await fetch('/api/sessions'))
+}
+
+export async function listSessionsPage(page = 0, size = 10): Promise<SessionPage> {
+  return unwrap<SessionPage>(await fetch(`/api/sessions/page?page=${page}&size=${size}`))
 }
 
 export async function createSession(title?: string): Promise<SessionItem> {
@@ -49,5 +60,13 @@ export async function setGuideMode(id: number, guideMode: number): Promise<Sessi
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ guideMode }),
+  }))
+}
+
+export async function renameSession(id: number, title: string): Promise<SessionItem> {
+  return unwrap<SessionItem>(await fetch(`/api/sessions/${id}/title`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
   }))
 }

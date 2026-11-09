@@ -22,35 +22,64 @@ button, input, select, textarea { font: inherit; }
 /* 固定视口高度：topbar 常驻，会话列表与对话区各自独立滚动，不随对方内容滚动。
    用 min-height 时父容器会被内容撑高，两栏的 overflow 不会生效（2026-11-09 修复）。 */
 .app-shell {
+  --sidebar-w: 248px;
   height: 100vh; height: 100dvh;
   display: flex; flex-direction: column; overflow: hidden;
 }
+.app-shell.sidebar-collapsed { --sidebar-w: 56px; }
 
 .topbar {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 10px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
 }
-.topbar h1 { font-size: 19px; }
+.topbar h1 { font-size: 17px; }
 .subtitle { color: var(--muted); font-size: 12px; }
-.topbar nav { display: flex; gap: 8px; align-items: center; }
-.conn { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; font-size: 12px; color: var(--muted); }
+.conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .conn::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .conn.up::before { background: var(--ok); }
 .conn.down::before { background: var(--error); }
-.topbar nav button {
-  border: 1px solid var(--border); background: var(--surface); color: var(--text);
-  border-radius: 8px; padding: 7px 14px; cursor: pointer;
-}
-.topbar nav button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-.layout { flex: 1 1 auto; display: grid; grid-template-columns: 248px 1fr; min-height: 0; }
-.sidebar {
-  min-height: 0; overflow-y: auto;
-  background: var(--surface); border-right: 1px solid var(--border); padding: 16px;
+/* 侧边栏宽度由 app-shell 上的开关驱动，收起后为 56px 图标条。 */
+.layout {
+  flex: 1 1 auto; display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 0;
+  transition: grid-template-columns .16s ease;
 }
-.sidebar-inner { display: flex; flex-direction: column; gap: 12px; }
-.panel-title { font-size: 14px; }
+.sidebar {
+  min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+  background: var(--surface); border-right: 1px solid var(--border); padding: 10px;
+}
+.sidebar.collapsed { padding: 10px 6px; align-items: center; }
+.sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex: 0 0 auto; }
+.sidebar-brand { font-size: 12px; color: var(--muted); padding-left: 6px; }
+.collapse-btn {
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  width: 26px; height: 26px; border-radius: 7px; cursor: pointer; flex: 0 0 26px; padding: 0;
+}
+.collapse-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.side-nav { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+.side-nav-group { font-size: 11px; color: var(--muted); padding: 10px 10px 4px; letter-spacing: .03em; }
+.side-nav-item {
+  width: 100%; display: flex; align-items: center; gap: 9px;
+  border: 0; background: none; border-radius: 8px; padding: 7px 10px;
+  cursor: pointer; color: var(--text); text-align: left; font-size: 13px;
+}
+.side-nav-item:hover { background: var(--bg); }
+.side-nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.side-nav-item.locked { opacity: .42; }
+.side-nav-icon { font-size: 15px; width: 20px; flex: 0 0 20px; text-align: center; }
+.side-nav-lock { margin-left: auto; font-weight: 700; }
+.sidebar.collapsed .side-nav-item { justify-content: center; padding: 8px 0; }
+.sidebar.collapsed .side-nav-icon { width: auto; flex: none; }
+.sidebar.collapsed .side-nav-entry { width: 100%; }
+
+.sidebar-sessions {
+  flex: 1 1 auto; min-height: 110px; overflow-y: auto;
+  border-top: 1px solid var(--border); padding-top: 10px;
+}
+.sidebar-inner { display: flex; flex-direction: column; gap: 8px; }
+.panel-title { font-size: 13px; }
 
 .workspace { min-height: 0; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow: auto; }
 
@@ -73,20 +102,34 @@ button, input, select, textarea { font: inherit; }
 .btn.danger { color: var(--error); }
 .btn.full { width: 100%; }
 
-.session-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.session-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .session-list li {
-  display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: center; gap: 2px;
   border: 1px solid transparent; border-radius: 8px;
 }
 .session-list li.active { background: var(--accent-soft); border-color: #c9d5ff; }
 .session-item {
   flex: 1; min-width: 0; text-align: left; background: none; border: 0;
-  padding: 8px; cursor: pointer; color: var(--text);
+  padding: 7px 8px; cursor: pointer; color: var(--text);
 }
 .session-item .session-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-item small { color: var(--muted); font-size: 11px; }
-.icon-btn { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 8px; }
+.session-actions { display: flex; flex: 0 0 auto; opacity: .3; }
+.session-list li:hover .session-actions { opacity: 1; }
+.icon-btn { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px 5px; line-height: 1; }
 .icon-btn:hover { color: var(--error); }
+.icon-btn.rename { font-size: 13px; }
+.icon-btn.rename:hover { color: var(--accent); }
+.session-rename-input {
+  flex: 1; min-width: 0; margin: 3px 2px 3px 6px;
+  border: 1px solid var(--accent); border-radius: 6px; padding: 5px 7px;
+  font: inherit; font-size: 13px; outline: none; background: var(--surface); color: var(--text);
+}
+.btn.load-more {
+  width: 100%; margin-top: 4px; font-size: 12px; color: var(--muted);
+  background: transparent; border-style: dashed;
+}
+.btn.load-more:hover:not(:disabled) { color: var(--accent); }
 
 .chat-card { min-height: 340px; display: flex; flex-direction: column; }
 .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

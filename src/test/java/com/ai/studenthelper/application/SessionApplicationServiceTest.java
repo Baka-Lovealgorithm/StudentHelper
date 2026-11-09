@@ -132,4 +132,65 @@ class SessionApplicationServiceTest {
 
         assertEquals(1, service.updateGuideMode(6L, 1).guideMode());
     }
+
+    @Test
+    void listPageReportsTotalAndHasMore() {
+        Session session = new Session();
+        session.setId(8L);
+        session.setTitle("分页会话");
+        when(sessionRepository.count()).thenReturn(23L);
+        when(sessionRepository.findPage(10, 10)).thenReturn(List.of(session));
+
+        var page = service.listPage(1, 10);
+
+        assertEquals(23L, page.total());
+        assertEquals(1, page.items().size());
+        assertEquals("分页会话", page.items().get(0).title());
+        assertTrue(page.hasMore(), "已取 20 条中的第 11 条，总数 23，仍有剩余");
+    }
+
+    @Test
+    void listPageLastBatchHasNoMore() {
+        Session a = new Session(); a.setId(1L); a.setTitle("A");
+        Session b = new Session(); b.setId(2L); b.setTitle("B");
+        Session c = new Session(); c.setId(3L); c.setTitle("C");
+        when(sessionRepository.count()).thenReturn(3L);
+        when(sessionRepository.findPage(10, 0)).thenReturn(List.of(a, b, c));
+
+        var page = service.listPage(0, 10);
+
+        assertEquals(3L, page.total());
+        assertEquals(3, page.items().size());
+        assertFalse(page.hasMore());
+    }
+
+    @Test
+    void renameTrimsTitleAndKeepsUpdatedAtStable() {
+        Session session = new Session();
+        session.setId(9L);
+        session.setTitle("旧标题");
+        LocalDateTime originalUpdatedAt = LocalDateTime.of(2026, 11, 9, 10, 0);
+        session.setUpdatedAt(originalUpdatedAt);
+        when(sessionRepository.findById(9L)).thenReturn(Optional.of(session));
+        when(sessionRepository.save(any(Session.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.rename(9L, "  新标题  ");
+
+        assertEquals("新标题", response.title());
+        assertEquals(originalUpdatedAt, response.updatedAt(), "重命名不应改变排序位置");
+    }
+
+    @Test
+    void renameRejectsBlankTitleAndMissingSession() {
+        Session session = new Session();
+        session.setId(9L);
+        session.setTitle("旧标题");
+        when(sessionRepository.findById(9L)).thenReturn(Optional.of(session));
+        BusinessException blank = assertThrows(BusinessException.class, () -> service.rename(9L, "   "));
+        assertEquals(ErrorCode.E1004, blank.getErrorCode());
+
+        when(sessionRepository.findById(99L)).thenReturn(Optional.empty());
+        BusinessException missing = assertThrows(BusinessException.class, () -> service.rename(99L, "标题"));
+        assertEquals(ErrorCode.E1003, missing.getErrorCode());
+    }
 }

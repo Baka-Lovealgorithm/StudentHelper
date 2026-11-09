@@ -4,6 +4,7 @@ import com.ai.studenthelper.common.BusinessException;
 import com.ai.studenthelper.common.ErrorCode;
 import com.ai.studenthelper.common.dto.MessageResponse;
 import com.ai.studenthelper.common.dto.SessionDetailResponse;
+import com.ai.studenthelper.common.dto.SessionPageResponse;
 import com.ai.studenthelper.common.dto.SessionResponse;
 import com.ai.studenthelper.domain.Message;
 import com.ai.studenthelper.domain.Session;
@@ -60,6 +61,32 @@ public class SessionApplicationService {
 
     public List<SessionResponse> list() {
         return sessionRepository.findAllOrdered().stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * 会话分页：按 updated_at / id 倒序，offset 由 page * size 计算。
+     * 前端只有「加载更多」，不暴露页码跳转；page 从 0 开始。
+     */
+    public SessionPageResponse listPage(int page, int size) {
+        long total = sessionRepository.count();
+        long offset = (long) page * size;
+        List<SessionResponse> items = sessionRepository.findPage(size, offset).stream()
+                .map(this::toResponse).toList();
+        return new SessionPageResponse(items, total, offset + items.size() < total);
+    }
+
+    /**
+     * 重命名会话。刻意不更新 updated_at：重命名不是对话活动，避免会话在列表里
+     * 跳到首位、打断用户正在浏览的位置。
+     */
+    public SessionResponse rename(Long id, String title) {
+        Session session = requireSession(id);
+        String normalized = title == null ? "" : title.trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.E1004);
+        }
+        session.setTitle(normalized);
+        return toResponse(sessionRepository.save(session));
     }
 
     public SessionDetailResponse detail(Long id) {
