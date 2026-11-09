@@ -3,12 +3,15 @@ package com.ai.studenthelper.controller;
 import com.ai.studenthelper.application.ChatApplicationService;
 import com.ai.studenthelper.application.SolutionStreamSink;
 import com.ai.studenthelper.common.dto.ChatCommand;
+import com.ai.studenthelper.common.dto.ContentPart;
 import com.ai.studenthelper.common.dto.DonePayload;
 import com.ai.studenthelper.common.dto.ImagePayload;
 import com.ai.studenthelper.common.BusinessException;
 import com.ai.studenthelper.common.ErrorCode;
 import com.ai.studenthelper.common.ImageFileValidator;
 import com.ai.studenthelper.domain.enums.AgentStage;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -34,6 +37,7 @@ public class ChatController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final ChatApplicationService service;
 
@@ -48,12 +52,14 @@ public class ChatController {
                              @RequestParam(value = "text", required = false) String text,
                              @RequestParam(value = "hint", required = false) String hint,
                              @RequestParam(value = "guideMode", defaultValue = "0") int guideMode,
+                             @RequestParam(value = "parts", required = false) String partsJson,
                              @RequestPart(value = "images", required = false) List<MultipartFile> images) {
         SseEmitter emitter = new SseEmitter(60_000L);
         SseSink sink = new SseSink(emitter);
         try {
             List<ImagePayload> payloads = readImages(images);
-            ChatCommand command = new ChatCommand(sessionId, text, hint, guideMode, payloads);
+            ChatCommand command = new ChatCommand(sessionId, text, hint, guideMode,
+                    payloads, readParts(partsJson));
             CompletableFuture.runAsync(() -> service.solve(command, sink))
                     .exceptionally(error -> {
                         emitUnexpectedFailure(sink, error);
@@ -80,6 +86,20 @@ public class ChatController {
             sink.onError(ErrorCode.E5000, null);
         } catch (Exception e) {
             log.warn("兜底失败事件推送异常 reason={}", e.getMessage());
+        }
+    }
+
+    /** 前端富文本输入框按输入顺序上报的图文段；缺失或为空时退回「整段文字 + 图片列表」。 */
+    private List<ContentPart> readParts(String partsJson) {
+        if (partsJson == null || partsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<ContentPart> parts = MAPPER.readValue(partsJson, new TypeReference<List<ContentPart>>() { });
+            return parts == null ? List.of() : parts;
+        } catch (Exception e) {
+            log.warn("parts 解析失败，退回按整段文字处理 reason={}", e.getMessage());
+            throw new BusinessException(ErrorCode.E1001, "图文顺序格式不正确，请重新输入");
         }
     }
 

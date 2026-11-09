@@ -138,9 +138,23 @@ code { font-size: 12px; word-break: break-all; }
 
 /* 解题主链路（T-101 / T-102 / T-106） */
 .composer { border-top: 1px solid var(--border); padding-top: 12px; display: grid; gap: 8px; }
-.composer textarea {
-  width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 10px;
+.composer-editor {
+  min-height: 76px; max-height: 240px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 10px;
   padding: 10px 12px; color: var(--text); background: var(--surface); font-size: 14px;
+  line-height: 1.7; white-space: pre-wrap; word-break: break-word; outline: none;
+}
+.composer-editor:focus { border-color: var(--accent); }
+.composer-editor:empty::before { content: attr(data-placeholder); color: var(--muted); }
+.img-chip { position: relative; display: inline-block; margin: 2px 4px; vertical-align: middle; }
+.img-chip img {
+  display: block; width: 56px; height: 56px; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--border);
+}
+.img-chip .chip-remove {
+  position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; line-height: 16px;
+  border-radius: 50%; border: 0; background: var(--error); color: #fff; cursor: pointer; padding: 0;
+  font-size: 12px;
 }
 .composer-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .composer-row input[type=file] { max-width: 210px; font-size: 12px; }
@@ -148,13 +162,6 @@ code { font-size: 12px; word-break: break-all; }
   flex: 1; min-width: 180px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px;
 }
 .mode-tag { color: var(--muted); font-size: 12px; }
-.preview-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.preview-item { position: relative; }
-.preview-item img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
-.preview-item button {
-  position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; line-height: 16px;
-  border-radius: 50%; border: 0; background: var(--error); color: #fff; cursor: pointer; padding: 0;
-}
 
 .status-bar { font-size: 12px; color: var(--muted); padding: 6px 0; }
 .status-bar.active { color: var(--accent); }

@@ -8,7 +8,7 @@ import {
 import SessionList from './components/SessionList'
 import ModelConfigPanel from './components/ModelConfigPanel'
 import UsagePanel from './components/UsagePanel'
-import Composer from './components/Composer'
+import Composer, { type ComposerPart } from './components/Composer'
 import SolutionView from './components/SolutionView'
 import AgentStatusBar from './components/AgentStatusBar'
 import { listFeedback, markFeedback } from './api/feedback'
@@ -142,7 +142,7 @@ export default function App() {
     await Promise.all([openSession(currentId), refreshSessions()])
   })
 
-  const handleSubmit = (text: string, hint: string, images: File[]) => {
+  const handleSubmit = (text: string, hint: string, images: File[], parts: ComposerPart[] = []) => {
     void (async () => {
       setBusy(true)
       setStage('UNDERSTANDING')
@@ -166,7 +166,7 @@ export default function App() {
           await refreshSessions()
         }
         await submitQuestion(
-          { sessionId, text, hint, images, guideMode: detail?.session.guideMode ?? 0 },
+          { sessionId, text, hint, images, parts, guideMode: detail?.session.guideMode ?? 0 },
           (event) => {
             let data: StreamEventData = {}
             try { data = JSON.parse(event.data) as StreamEventData } catch { /* 忽略非 JSON 事件 */ }

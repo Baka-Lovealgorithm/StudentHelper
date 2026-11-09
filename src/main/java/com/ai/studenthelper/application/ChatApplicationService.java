@@ -117,7 +117,8 @@ public class ChatApplicationService {
             // 开启态按当前学科构建 base 并依次叠加记忆 / 补充段落 / 多解法 / 技能
             String systemPrompt = promptAugmenter.buildAndAugment(mode);
             List<Message> history = messageRepository.findBySessionId(command.sessionId());
-            List<Msg> messages = contextAssembler.assemble(history, command.text(), command.hint(), command.images());
+            List<Msg> messages = contextAssembler.assemble(history, command.parts(),
+                    command.text(), command.hint(), command.images());
             // T-301：MCP 开关开启且有可用 Server 时才装配工具；null 表示无工具
             toolkit = agentFactory.openToolkit();
             var agent = agentFactory.create(systemPrompt, config, toolkit);

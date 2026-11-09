@@ -8,9 +8,16 @@ public record ChatCommand(
         String text,
         String hint,
         int guideMode,
-        List<ImagePayload> images
+        List<ImagePayload> images,
+        List<ContentPart> parts
 ) {
     public ChatCommand {
         images = images == null ? List.of() : images;
+        parts = parts == null ? List.of() : parts;
+    }
+
+    /** 兼容旧调用（无有序段）：文字整体作为唯一文本段。 */
+    public ChatCommand(Long sessionId, String text, String hint, int guideMode, List<ImagePayload> images) {
+        this(sessionId, text, hint, guideMode, images, List.of());
     }
 }
