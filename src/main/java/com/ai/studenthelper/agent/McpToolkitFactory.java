@@ -26,6 +26,7 @@ public class McpToolkitFactory {
     private static final Logger log = LoggerFactory.getLogger(McpToolkitFactory.class);
     private static final int MAX_SERVERS = 3;
     private static final int MAX_TOOLS = 32;
+    private static final int CONNECT_ATTEMPTS = 2;
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration DISCOVER_TIMEOUT = Duration.ofSeconds(10);
@@ -50,15 +51,19 @@ public class McpToolkitFactory {
         Toolkit toolkit = new Toolkit();
         boolean anyRegistered = false;
         for (McpServerResponse server : servers) {
-            McpClientWrapper client = null;
-            try {
-                client = buildClient(server);
-                toolkit.registerMcpClient(client).block(DISCOVER_TIMEOUT);
-                anyRegistered = true;
-                log.info("MCP_CONNECTED server={} transport={}", server.name(), server.transport());
-            } catch (Exception e) {
-                closeQuietly(client);
-                log.warn("MCP_CONNECT_FAILED server={} reason={}", server.name(), reason(e));
+            for (int attempt = 1; attempt <= CONNECT_ATTEMPTS && !anyRegistered; attempt++) {
+                McpClientWrapper client = null;
+                try {
+                    client = buildClient(server);
+                    toolkit.registerMcpClient(client).block(DISCOVER_TIMEOUT);
+                    anyRegistered = true;
+                    log.info("MCP_CONNECTED server={} transport={} attempt={}",
+                            server.name(), server.transport(), attempt);
+                } catch (Exception e) {
+                    closeQuietly(client);
+                    log.warn("MCP_CONNECT_FAILED server={} attempt={} reason={}",
+                            server.name(), attempt, reason(e));
+                }
             }
         }
         if (!anyRegistered) {
@@ -99,15 +104,24 @@ public class McpToolkitFactory {
     }
 
     private static McpClientWrapper buildClient(McpServerResponse server) {
-        McpClientBuilder builder = McpClientBuilder.create(server.name())
-                .timeout(CALL_TIMEOUT)
-                .initializationTimeout(CONNECT_TIMEOUT);
-        if ("SSE".equalsIgnoreCase(server.transport())) {
-            builder.sseTransport(server.url());
-        } else {
-            builder.streamableHttpTransport(server.url());
+        // MCP SDK 通过 ServiceLoader 查 JSON 映射器；在 Reactor 工作线程上 TCCL 可能不是应用类加载器，
+        // 会抛「No default McpJsonMapper implementation found」，这里显式指定后再恢复
+        Thread thread = Thread.currentThread();
+        ClassLoader original = thread.getContextClassLoader();
+        thread.setContextClassLoader(McpToolkitFactory.class.getClassLoader());
+        try {
+            McpClientBuilder builder = McpClientBuilder.create(server.name())
+                    .timeout(CALL_TIMEOUT)
+                    .initializationTimeout(CONNECT_TIMEOUT);
+            if ("SSE".equalsIgnoreCase(server.transport())) {
+                builder.sseTransport(server.url());
+            } else {
+                builder.streamableHttpTransport(server.url());
+            }
+            return builder.buildSync();
+        } finally {
+            thread.setContextClassLoader(original);
         }
-        return builder.buildSync();
     }
 
     private static void closeQuietly(McpClientWrapper client) {
