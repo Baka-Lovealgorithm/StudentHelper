@@ -2,6 +2,9 @@ package com.ai.studenthelper.agent;
 
 import com.ai.studenthelper.infra.model.ModelConfigResolver;
 import io.agentscope.core.ReActAgent;
+import io.agentscope.core.permission.PermissionBehavior;
+import io.agentscope.core.permission.PermissionContextState;
+import io.agentscope.core.permission.PermissionRule;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.springframework.stereotype.Component;
@@ -33,8 +36,22 @@ public class SolverAgentFactory {
                 .maxIters(toolkit == null ? 1 : 3);
         if (toolkit != null) {
             builder.toolkit(toolkit);
+            // T-301 / AC-301-3：McpTool.checkPermissions 对非 read-only 的 MCP 工具一律返回 ASK，
+            // 无人值守的解题链路没有确认入口，ASK 会让工具调用一直挂起（不执行、最终空文本 → E2005）。
+            // 这里按工具名逐条加 ALLOW 规则（仅限本次装配的 MCP 工具），比整体 BYPASS 收得更紧。
+            builder.permissionContext(mcpAllowAll(toolkit));
         }
         return builder.build();
+    }
+
+    /** 为本次装配的 MCP 工具逐条放行；deny/ask 规则与其它工具不受影响。 */
+    private static PermissionContextState mcpAllowAll(Toolkit toolkit) {
+        PermissionContextState.Builder permissions = PermissionContextState.builder();
+        for (String toolName : toolkit.getToolNames()) {
+            permissions.addAllowRule(toolName,
+                    new PermissionRule(toolName, null, PermissionBehavior.ALLOW, "mcp-toolkit"));
+        }
+        return permissions.build();
     }
 
     /** S2 辅助调用（知识点抽取 / 相似题 / 判分）：非流式、独立实例、不复用解题 Agent。 */

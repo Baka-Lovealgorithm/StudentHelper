@@ -118,7 +118,8 @@ public class McpToolkitFactory {
             } else {
                 builder.streamableHttpTransport(server.url());
             }
-            return builder.buildSync();
+            // 与官方文档一致：buildAsync().block()，避免在 Reactor 线程上用同步客户端
+            return builder.buildAsync().block(CONNECT_TIMEOUT);
         } finally {
             thread.setContextClassLoader(original);
         }
