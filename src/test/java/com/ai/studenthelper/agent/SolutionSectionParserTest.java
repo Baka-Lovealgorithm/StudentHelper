@@ -56,4 +56,29 @@ class SolutionSectionParserTest {
         assertTrue(withLine.endsWith("本内容由 AI 生成，请自行核对\n"));
         assertFalse(fullAnswer().contains("本内容由 AI 生成"));
     }
+
+    @Test
+    void disclaimerFromModelIsDeduplicated() {
+        String modelEchoed = fullAnswer() + "\n本内容由 AI 生成，请自行核对\n";
+        String stored = parser.appendDisclaimer(modelEchoed);
+        assertEquals(1, countOccurrences(stored, "本内容由 AI 生成"));
+        assertTrue(stored.endsWith("本内容由 AI 生成，请自行核对\n"));
+    }
+
+    @Test
+    void appendedTwiceStaysSingleLine() {
+        String once = parser.appendDisclaimer(fullAnswer());
+        String twice = parser.appendDisclaimer(once);
+        assertEquals(1, countOccurrences(twice, "本内容由 AI 生成"));
+    }
+
+    private static int countOccurrences(String text, String needle) {
+        int count = 0;
+        int index = text.indexOf(needle);
+        while (index >= 0) {
+            count++;
+            index = text.indexOf(needle, index + needle.length());
+        }
+        return count;
+    }
 }

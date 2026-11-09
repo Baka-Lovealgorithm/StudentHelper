@@ -30,7 +30,11 @@ public class ChatContextAssembler {
                 continue;
             }
             MsgRole role = "ASSISTANT".equals(message.getRole()) ? MsgRole.ASSISTANT : MsgRole.USER;
-            messages.add(Msg.builder().role(role).textContent(message.getContent()).build());
+            // 历史里的「本内容由 AI 生成」是后端追加的，带进上下文会让模型模仿并在新一轮自己输出一次
+            String content = role == MsgRole.ASSISTANT
+                    ? SolutionSectionParser.stripDisclaimer(message.getContent())
+                    : message.getContent();
+            messages.add(Msg.builder().role(role).textContent(content).build());
         }
 
         List<ContentBlock> blocks = new ArrayList<>();

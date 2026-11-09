@@ -48,6 +48,15 @@ class ChatContextAssemblerTest {
     }
 
     @Test
+    void assistantHistoryDisclaimerIsStripped() {
+        Message withLine = message("ASSISTANT",
+                "## ① 题目理解\n旧答案\n\n本内容由 AI 生成，请自行核对\n", "SUCCESS");
+        List<Msg> result = assembler.assemble(List.of(withLine), "新题", null, List.of());
+        assertFalse(result.get(0).getTextContent().contains("本内容由 AI 生成"));
+        assertTrue(result.get(0).getTextContent().contains("旧答案"));
+    }
+
+    @Test
     void historyIsCappedAtTwelveMessages() {
         List<Message> history = new ArrayList<>();
         for (int i = 0; i < 20; i++) {

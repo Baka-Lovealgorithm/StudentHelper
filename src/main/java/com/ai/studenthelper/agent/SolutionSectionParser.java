@@ -12,6 +12,9 @@ import java.util.List;
 @Component
 public class SolutionSectionParser {
 
+    /** 由后端统一追加的 AI 生成提示行；模型偶发自己输出时要避免重复。 */
+    public static final String DISCLAIMER = "本内容由 AI 生成，请自行核对";
+
     public record Section(String title, String body) {
     }
 
@@ -60,6 +63,20 @@ public class SolutionSectionParser {
     /** 追加固定的 AI 生成提示行（AC-102-6），由后端保证，不依赖模型。 */
     public String appendDisclaimer(String text) {
         String trimmed = text == null ? "" : text.trim();
-        return trimmed + "\n\n本内容由 AI 生成，请自行核对\n";
+        // 开启态多轮时模型会模仿历史里的提示行自己输出一次，这里去重，避免落库出现两行
+        String withoutModelLine = stripDisclaimer(trimmed);
+        return withoutModelLine + "\n\n" + DISCLAIMER + "\n";
+    }
+
+    /** 去掉末尾已有的提示行（可能因模型模仿而重复多次）。 */
+    public static String stripDisclaimer(String text) {
+        if (text == null) {
+            return "";
+        }
+        String result = text.trim();
+        while (result.endsWith(DISCLAIMER)) {
+            result = result.substring(0, result.length() - DISCLAIMER.length()).trim();
+        }
+        return result;
     }
 }
