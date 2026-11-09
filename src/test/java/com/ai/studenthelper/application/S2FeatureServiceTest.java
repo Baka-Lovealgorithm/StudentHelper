@@ -26,11 +26,13 @@ class S2FeatureServiceTest {
     private FeatureToggleRepository repository;
 
     @Test
-    void listReturnsAllNineFeaturesAndDefaultsToClosedWhenRowMissing() {
+    void listReturnsAllFeaturesAndDefaultsToClosedWhenRowMissing() {
         when(repository.findAll()).thenReturn(Map.of("usagePanel", true));
         var rows = new S2FeatureService(repository).list();
 
-        assertEquals(9, rows.size());
+        assertEquals(14, rows.size(), "S2 九项 + S3 五项");
+        assertTrue(rows.stream().anyMatch(r -> r.key().equals("mcp")));
+        assertTrue(rows.stream().anyMatch(r -> r.key().equals("learningStats")));
         assertTrue(rows.stream().anyMatch(r -> r.key().equals("usagePanel") && r.enabled()));
         assertTrue(rows.stream().filter(r -> !r.key().equals("usagePanel"))
                 .allMatch(r -> !r.enabled()), "数据库缺行时按关闭处理");

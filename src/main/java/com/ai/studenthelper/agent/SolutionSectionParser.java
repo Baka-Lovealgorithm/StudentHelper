@@ -22,10 +22,19 @@ public class SolutionSectionParser {
         if (text == null || text.isBlank()) {
             throw new BusinessException(ErrorCode.E2005);
         }
-        // T-204：开启可选段落时，「## 补充：」之后的内容不参与 ①~⑥ 校验，
-        // 避免 ⑥ 段混入补充内容而误判；落库仍保留完整原文。
+        // T-204 / T-306：开启可选段落或一题多解时，「## 补充：」「## 附加：」之后的内容不参与 ①~⑥ 校验，
+        // 避免 ⑥ 段混入扩展内容而误判；落库仍保留完整原文。
         int optionalAt = text.indexOf("\n## 补充：");
-        String core = optionalAt > 0 ? text.substring(0, optionalAt) : text;
+        int extraAt = text.indexOf("\n## 附加：");
+        int cutAt;
+        if (optionalAt < 0) {
+            cutAt = extraAt;
+        } else if (extraAt < 0) {
+            cutAt = optionalAt;
+        } else {
+            cutAt = Math.min(optionalAt, extraAt);
+        }
+        String core = cutAt > 0 ? text.substring(0, cutAt) : text;
         List<String> titles = SolverPromptTemplate.titlesFor(mode);
         List<Section> sections = new ArrayList<>();
         for (int i = 0; i < titles.size(); i++) {

@@ -25,7 +25,9 @@ function splitSections(content: string): { prefix: string; sections: Section[] }
   let current: Section | null = null
   for (const line of lines) {
     const trimmed = line.trim()
-    if (trimmed.startsWith('## ') && MARKERS.some((m) => trimmed.slice(3).startsWith(m))) {
+    const sectionTitle = trimmed.startsWith('## ') ? trimmed.slice(3) : ''
+    const extra = sectionTitle.startsWith('补充：') || sectionTitle.startsWith('附加：')
+    if (trimmed.startsWith('## ') && (extra || MARKERS.some((m) => sectionTitle.startsWith(m)))) {
       if (current) sections.push(current)
       current = { title: trimmed.slice(3), body: '' }
     } else if (current) {

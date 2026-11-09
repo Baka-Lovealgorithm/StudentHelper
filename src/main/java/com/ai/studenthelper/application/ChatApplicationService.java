@@ -28,6 +28,7 @@ import io.agentscope.core.agent.EventType;
 import io.agentscope.core.agent.StreamOptions;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.model.ChatUsage;
+import io.agentscope.core.tool.Toolkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -91,6 +92,7 @@ public class ChatApplicationService {
         long t0 = System.currentTimeMillis();
         Message userMessage = null;
         ModelConfigResolver.ResolvedModelConfig config = null;
+        Toolkit toolkit = null;
         String generatedText = null;
         try {
             sessionService.requireSession(command.sessionId());
@@ -111,11 +113,14 @@ public class ChatApplicationService {
 
             sink.onStatus(AgentStage.UNDERSTANDING);
             GuideMode mode = GuideMode.fromCode(command.guideMode());
-            // 关闭态 augment 原样返回，保证 AC-204-1 与 Gate-2 关闭态逐字一致
-            String systemPrompt = promptAugmenter.augment(SolverPromptTemplate.build(mode));
+            // 关闭态 buildAndAugment 输出与 S1 逐字一致（AC-204-1）；
+            // 开启态按当前学科构建 base 并依次叠加记忆 / 补充段落 / 多解法 / 技能
+            String systemPrompt = promptAugmenter.buildAndAugment(mode);
             List<Message> history = messageRepository.findBySessionId(command.sessionId());
             List<Msg> messages = contextAssembler.assemble(history, command.text(), command.hint(), command.images());
-            var agent = agentFactory.create(systemPrompt, config);
+            // T-301：MCP 开关开启且有可用 Server 时才装配工具；null 表示无工具
+            toolkit = agentFactory.openToolkit();
+            var agent = agentFactory.create(systemPrompt, config, toolkit);
 
             sink.onStatus(AgentStage.GENERATING);
             Generation generation = generate(agent, messages, sink, mode, t0);
@@ -149,6 +154,9 @@ public class ChatApplicationService {
             knowledgeExtractor.extractAndRecord(command.sessionId(), savedAssistant.getId(), answer);
         } catch (Exception e) {
             handleFailure(command, sink, userMessage, config, e, t0, generatedText);
+        } finally {
+            // 工具连接必须随请求关闭，避免 MCP 客户端泄漏
+            agentFactory.closeToolkit(toolkit);
         }
     }
 

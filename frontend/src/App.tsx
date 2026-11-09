@@ -17,6 +17,10 @@ import { listFeatures } from './api/features'
 import KnowledgePanel from './components/KnowledgePanel'
 import PracticeCard from './components/PracticeCard'
 import ProfilePanel from './components/ProfilePanel'
+import SubjectPanel from './components/SubjectPanel'
+import SkillPanel from './components/SkillPanel'
+import McpPanel from './components/McpPanel'
+import StatsPanel from './components/StatsPanel'
 import WrongBookPanel from './components/WrongBookPanel'
 import { markWrong } from './api/wrongBook'
 
@@ -34,7 +38,7 @@ interface StreamEventData {
 }
 
 export default function App() {
-  const [view, setView] = useState<'chat' | 'config' | 'usage' | 'features' | 'knowledge' | 'profile' | 'wrongBook'>('chat')
+  const [view, setView] = useState<'chat' | 'config' | 'usage' | 'features' | 'knowledge' | 'profile' | 'wrongBook' | 'subject' | 'skill' | 'mcp' | 'stats'>('chat')
   /** 当前展开「举一反三」卡片的助手消息 id（T-205）。 */
   const [practiceFor, setPracticeFor] = useState<number | null>(null)
   /** S2 开关快照（DD-01），默认空对象即全部关闭。 */
@@ -66,6 +70,10 @@ export default function App() {
     if (!snapshot.knowledgeExtract) setView((v) => (v === 'knowledge' ? 'chat' : v))
     if (!snapshot.memory) setView((v) => (v === 'profile' ? 'chat' : v))
     if (!snapshot.wrongBook) setView((v) => (v === 'wrongBook' ? 'chat' : v))
+    if (!snapshot.subjectTemplate) setView((v) => (v === 'subject' ? 'chat' : v))
+    if (!snapshot.skill) setView((v) => (v === 'skill' ? 'chat' : v))
+    if (!snapshot.mcp) setView((v) => (v === 'mcp' ? 'chat' : v))
+    if (!snapshot.learningStats) setView((v) => (v === 'stats' ? 'chat' : v))
   }, [])
 
   const openSession = useCallback(async (id: number) => {
@@ -254,6 +262,18 @@ export default function App() {
           {features.wrongBook && (
             <button type="button" className={view === 'wrongBook' ? 'active' : ''} onClick={() => setView('wrongBook')}>错题本</button>
           )}
+          {features.learningStats && (
+            <button type="button" className={view === 'stats' ? 'active' : ''} onClick={() => setView('stats')}>学情统计</button>
+          )}
+          {features.subjectTemplate && (
+            <button type="button" className={view === 'subject' ? 'active' : ''} onClick={() => setView('subject')}>学科</button>
+          )}
+          {features.skill && (
+            <button type="button" className={view === 'skill' ? 'active' : ''} onClick={() => setView('skill')}>技能</button>
+          )}
+          {features.mcp && (
+            <button type="button" className={view === 'mcp' ? 'active' : ''} onClick={() => setView('mcp')}>MCP 工具</button>
+          )}
           <button type="button" className={view === 'features' ? 'active' : ''} onClick={() => setView('features')}>功能开关</button>
         </nav>
       </header>
@@ -278,6 +298,10 @@ export default function App() {
               ? <WrongBookPanel onOpenSession={(id) => void guard(() => openSession(id))} />
             : view === 'knowledge' && features.knowledgeExtract ? <KnowledgePanel />
             : view === 'usage' && features.usagePanel ? <UsagePanel />
+            : view === 'stats' && features.learningStats ? <StatsPanel />
+            : view === 'subject' && features.subjectTemplate ? <SubjectPanel />
+            : view === 'skill' && features.skill ? <SkillPanel />
+            : view === 'mcp' && features.mcp ? <McpPanel />
             : view === 'config' ? <ModelConfigPanel /> : (
             <>
               <section className="card chat-card">
