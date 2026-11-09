@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 
 /** 有序图文段：value 为文字内容，index 指向 images 数组下标。 */
 export interface ComposerPart {
@@ -12,6 +12,8 @@ interface Props {
   busy: boolean
   guideMode: number
   onSubmit: (text: string, hint: string, images: File[], parts: ComposerPart[]) => void
+  /** CR-013：由上层注入的模型选择器，渲染在输入框卡片底部工具条。 */
+  modelSlot?: ReactNode
 }
 
 const ALLOWED = ['image/png', 'image/jpeg', 'image/webp']
@@ -29,7 +31,7 @@ function typeOf(file: File): string {
   return ''
 }
 
-export default function Composer({ disabled, busy, guideMode, onSubmit }: Props) {
+export default function Composer({ disabled, busy, guideMode, onSubmit, modelSlot }: Props) {
   const [hint, setHint] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -229,30 +231,38 @@ export default function Composer({ disabled, busy, guideMode, onSubmit }: Props)
   return (
     <form className="composer" onSubmit={submit}>
       {localError && <p className="error">{localError}</p>}
-      <div
-        ref={editorRef}
-        className="composer-editor"
-        contentEditable={!disabled && !busy}
-        role="textbox"
-        aria-multiline="true"
-        aria-label="题目输入框，支持粘贴截图"
-        data-placeholder={PLACEHOLDER}
-        onPaste={paste}
-        onKeyDown={keydown}
-        suppressContentEditableWarning
-      />
-      <div className="composer-row">
-        <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={pick} disabled={disabled || busy} />
-        <input
-          className="hint-input"
-          placeholder="难度 / 讲解要求（可选），如：用初学者能懂的话"
-          value={hint}
-          onChange={(e) => setHint(e.target.value)}
-          disabled={disabled || busy}
+      <div className="composer-box">
+        <div
+          ref={editorRef}
+          className="composer-editor"
+          contentEditable={!disabled && !busy}
+          role="textbox"
+          aria-multiline="true"
+          aria-label="题目输入框，支持粘贴截图"
+          data-placeholder={PLACEHOLDER}
+          onPaste={paste}
+          onKeyDown={keydown}
+          suppressContentEditableWarning
         />
-        <span className="mode-tag">{guideMode === 1 ? '仅思路' : '完整解答'}</span>
-        <button type="submit" className="btn primary" disabled={disabled || busy}>{busy ? '生成中…' : '提交题目'}</button>
+        <div className="composer-toolbar">
+          <div className="composer-toolbar-main">
+            {modelSlot}
+            <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={pick} disabled={disabled || busy} />
+            <input
+              className="hint-input"
+              placeholder="难度 / 讲解要求（可选），如：用初学者能懂的话"
+              value={hint}
+              onChange={(e) => setHint(e.target.value)}
+              disabled={disabled || busy}
+            />
+          </div>
+          <div className="composer-toolbar-actions">
+            <span className="mode-tag">{guideMode === 1 ? '仅思路' : '完整解答'}</span>
+            <button type="submit" className="btn primary" disabled={disabled || busy}>{busy ? '生成中…' : '提交题目'}</button>
+          </div>
+        </div>
       </div>
+      <p className="composer-footnote">切换仅影响当前会话，新会话继承全局默认模型</p>
     </form>
   )
 }

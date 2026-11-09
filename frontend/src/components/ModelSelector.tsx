@@ -35,7 +35,7 @@ export default function ModelSelector({ sessionId, modelId, onChanged, disabled 
   }
 
   return (
-    <div className="model-selector">
+    <div className="model-selector" title="切换仅影响当前会话，新会话继承全局默认模型">
       <span className="muted">模型</span>
       <select aria-label="模型厂商" value={providerId ?? ''} disabled={unavailable}
         onChange={(e) => changeProvider(Number(e.target.value))}>

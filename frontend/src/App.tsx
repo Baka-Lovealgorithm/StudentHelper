@@ -355,16 +355,6 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="chat-model-row">
-                  <ModelSelector
-                    sessionId={currentId}
-                    modelId={detail?.session.modelId ?? null}
-                    onChanged={handleModelChange}
-                    disabled={busy}
-                  />
-                  <span className="muted">切换仅影响当前会话，新会话继承全局默认模型</span>
-                </div>
-
                 <AgentStatusBar stage={stage} busy={busy} error={streamError} timing={timing} />
 
                 <div className="messages">
@@ -449,6 +439,14 @@ export default function App() {
                   busy={busy}
                   guideMode={detail?.session.guideMode ?? 0}
                   onSubmit={handleSubmit}
+                  modelSlot={
+                    <ModelSelector
+                      sessionId={currentId}
+                      modelId={detail?.session.modelId ?? null}
+                      onChanged={handleModelChange}
+                      disabled={busy}
+                    />
+                  }
                 />
               </section>
             </>
