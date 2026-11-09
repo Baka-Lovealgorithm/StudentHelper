@@ -2,15 +2,16 @@ package com.ai.studenthelper.agent;
 
 import com.ai.studenthelper.common.dto.ImagePayload;
 import com.ai.studenthelper.domain.Message;
+import io.agentscope.core.message.Base64Source;
 import io.agentscope.core.message.ImageBlock;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
-import io.agentscope.core.message.URLSource;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,16 +70,29 @@ class ChatContextAssemblerTest {
     }
 
     @Test
-    void imageBecomesBase64DataUrlBlock() {
-        ImagePayload image = new ImagePayload("a.png", "image/png", "png",
-                "fake-bytes".getBytes(StandardCharsets.UTF_8));
+    void imageBecomesBase64SourceBlock() {
+        byte[] bytes = "fake-bytes".getBytes(StandardCharsets.UTF_8);
+        ImagePayload image = new ImagePayload("a.png", "image/png", "png", bytes);
         List<Msg> result = assembler.assemble(List.of(), "看图", null, List.of(image));
         Msg current = result.get(0);
         assertEquals(2, current.getContent().size());
         assertTrue(current.getContent().get(0) instanceof TextBlock);
         ImageBlock block = (ImageBlock) current.getContent().get(1);
-        URLSource source = (URLSource) block.getSource();
-        assertTrue(source.getUrl().startsWith("data:image/png;base64,"));
-        assertEquals("image/png", source.getMimeType());
+        Base64Source source = (Base64Source) block.getSource();
+        assertEquals("image/png", source.getMediaType());
+        // data 只放纯 base64，data: 前缀由框架的 convertImageSourceToUrl 拼
+        assertFalse(source.getData().startsWith("data:"));
+        assertArrayEquals(bytes, Base64.getDecoder().decode(source.getData()));
+    }
+
+    @Test
+    void multipleImagesKeepTheirOrder() {
+        ImagePayload first = new ImagePayload("a.png", "image/png", "png", "A".getBytes(StandardCharsets.UTF_8));
+        ImagePayload second = new ImagePayload("b.jpg", "image/jpeg", "jpg", "B".getBytes(StandardCharsets.UTF_8));
+        List<Msg> result = assembler.assemble(List.of(), "两图", null, List.of(first, second));
+        List<io.agentscope.core.message.ContentBlock> blocks = result.get(0).getContent();
+        assertEquals(3, blocks.size()); // 文本 + 两张图
+        assertEquals("image/png", ((Base64Source) ((ImageBlock) blocks.get(1)).getSource()).getMediaType());
+        assertEquals("image/jpeg", ((Base64Source) ((ImageBlock) blocks.get(2)).getSource()).getMediaType());
     }
 }

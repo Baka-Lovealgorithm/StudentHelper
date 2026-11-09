@@ -2,19 +2,19 @@ package com.ai.studenthelper.agent;
 
 import com.ai.studenthelper.common.dto.ImagePayload;
 import com.ai.studenthelper.domain.Message;
+import io.agentscope.core.message.Base64Source;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.ImageBlock;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
-import io.agentscope.core.message.URLSource;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 
-/** 会话历史 → 模型消息；失败消息不进上下文，图片转 data URL（技术规范 4.4、7.2）。 */
+/** 会话历史 → 模型消息；失败消息不进上下文，图片以 Base64Source 内联（技术规范 4.4、7.2）。 */
 @Component
 public class ChatContextAssembler {
 
@@ -47,9 +47,11 @@ public class ChatContextAssembler {
         blocks.add(TextBlock.builder().text(userText.toString()).build());
 
         for (ImagePayload image : images) {
-            String dataUrl = "data:" + image.mimeType() + ";base64,"
-                    + Base64.getEncoder().encodeToString(image.bytes());
-            blocks.add(new ImageBlock(new URLSource(dataUrl, image.mimeType())));
+            // Base64Source 由框架拼 data URI，避免把 base64 冒充成 URL（技术规范 TCR-028）
+            blocks.add(new ImageBlock(Base64Source.builder()
+                    .mediaType(image.mimeType())
+                    .data(Base64.getEncoder().encodeToString(image.bytes()))
+                    .build()));
         }
         messages.add(Msg.builder().role(MsgRole.USER).content(blocks).build());
         return messages;

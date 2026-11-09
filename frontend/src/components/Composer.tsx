@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react'
 
 interface Props {
   disabled: boolean
@@ -25,25 +25,47 @@ export default function Composer({ disabled, busy, guideMode, onSubmit }: Props)
     return () => urls.forEach((url) => URL.revokeObjectURL(url))
   }, [files])
 
-  const pick = (event: ChangeEvent<HTMLInputElement>) => {
-    const picked = Array.from(event.target.files ?? [])
+  /** 选择文件与粘贴图片共用同一套校验与入列规则，保证两种入口行为一致。 */
+  const accept = (incoming: File[]): boolean => {
+    if (incoming.length === 0) return false
     setLocalError(null)
-    if (picked.length + files.length > MAX_FILES) {
+    if (incoming.length + files.length > MAX_FILES) {
       setLocalError(`单条消息最多 ${MAX_FILES} 张图片`)
-      return
+      return false
     }
-    for (const file of picked) {
+    for (const file of incoming) {
       if (!ALLOWED.includes(file.type)) {
         setLocalError('仅支持 png / jpg / webp 图片')
-        return
+        return false
       }
       if (file.size > MAX_BYTES) {
         setLocalError('单张图片不能超过 10 MB')
-        return
+        return false
       }
     }
-    setFiles((previous) => [...previous, ...picked])
+    setFiles((previous) => [...previous, ...incoming])
+    return true
+  }
+
+  const pick = (event: ChangeEvent<HTMLInputElement>) => {
+    accept(Array.from(event.target.files ?? []))
     if (inputRef.current) inputRef.current.value = ''
+  }
+
+  /** 截图 / 复制图片后 Ctrl+V：取剪贴板里的图片文件，交给 accept 走同一套规则。 */
+  const paste = (event: ClipboardEvent<HTMLFormElement>) => {
+    if (disabled || busy) return
+    const pasted: File[] = []
+    for (const item of Array.from(event.clipboardData?.items ?? [])) {
+      if (item.kind !== 'file') continue
+      if (!item.type.startsWith('image/')) continue
+      const file = item.getAsFile()
+      if (file) pasted.push(file)
+    }
+    if (pasted.length === 0) return
+    // 剪贴板带图片时拦掉默认粘贴，避免把图片 URL 或二进制噪声写进输入框
+    event.preventDefault()
+    accept(pasted)
   }
 
   const submit = (event: FormEvent) => {
@@ -61,7 +83,7 @@ export default function Composer({ disabled, busy, guideMode, onSubmit }: Props)
   }
 
   return (
-    <form className="composer" onSubmit={submit}>
+    <form className="composer" onSubmit={submit} onPaste={paste}>
       {localError && <p className="error">{localError}</p>}
       {previews.length > 0 && (
         <div className="preview-row">
@@ -75,7 +97,7 @@ export default function Composer({ disabled, busy, guideMode, onSubmit }: Props)
       )}
       <textarea
         rows={3}
-        placeholder="输入数据结构题目，例如：已知二叉树的前序与中序序列，说明如何唯一确定该树……"
+        placeholder="输入数据结构题目，或直接按 Ctrl+V 粘贴截图；例如：已知二叉树的前序与中序序列，说明如何唯一确定该树……"
         value={text}
         onChange={(e) => setText(e.target.value)}
         disabled={disabled || busy}
