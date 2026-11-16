@@ -8,7 +8,11 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "check:math": "node --experimental-strip-types scripts/check-math-text.mjs"
+    "check:math": "node --experimental-strip-types scripts/check-math-text.mjs",
+    "check:stream": "node --experimental-strip-types scripts/check-stream-events.mjs",
+    "check:sections": "node --experimental-strip-types scripts/check-sections.mjs",
+    "check:views": "node --experimental-strip-types scripts/check-views.mjs",
+    "check": "npm run check:math && npm run check:stream && npm run check:sections && npm run check:views"
   },
   "dependencies": {
     "katex": "^0.19.1",
@@ -16,6 +20,7 @@
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0"
   },
   "devDependencies": {

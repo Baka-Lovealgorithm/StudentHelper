@@ -10,6 +10,7 @@ const LABELS: Record<string, string> = {
   GENERATING: '正在生成解答…',
   DONE: '生成完成',
   FAILED: '生成失败',
+  STOPPED: '已停止生成',
 }
 
 export default function AgentStatusBar({ stage, busy, error, timing }: Props) {

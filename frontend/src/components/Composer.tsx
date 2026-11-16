@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import GuideModeSelector from './GuideModeSelector'
+import ComposerPlusMenu from './ComposerPlusMenu'
 
 /** 有序图文段：value 为文字内容，index 指向 images 数组下标。 */
 export interface ComposerPart {
@@ -11,9 +13,17 @@ interface Props {
   disabled: boolean
   busy: boolean
   guideMode: number
+  /** CR-036：引导模式改由输入区下拉承载，切换仍走会话级 setGuideMode。 */
+  onGuideModeChange: (mode: number) => void
   onSubmit: (text: string, hint: string, images: File[], parts: ComposerPart[]) => void
-  /** CR-013：由上层注入的模型选择器，渲染在输入框卡片底部工具条。 */
+  /** CR-013 / CR-014：由上层注入的模型选择器，渲染在发送按钮左侧。 */
   modelSlot?: ReactNode
+  /** CR-018：会话级学科三态选择器，渲染在输入框底部工具条最左侧。 */
+  subjectSlot?: ReactNode
+  /** CR-038：会话级通用技能选择器，与引导模式 / 模型选择器同列于工具条右侧。 */
+  skillSlot?: ReactNode
+  /** CR-053：生成中点击停止当前回答。 */
+  onStop?: () => void
 }
 
 const ALLOWED = ['image/png', 'image/jpeg', 'image/webp']
@@ -31,16 +41,20 @@ function typeOf(file: File): string {
   return ''
 }
 
-export default function Composer({ disabled, busy, guideMode, onSubmit, modelSlot }: Props) {
-  const [hint, setHint] = useState('')
+export default function Composer({ disabled, busy, guideMode, onGuideModeChange, onSubmit, modelSlot, subjectSlot, skillSlot, onStop }: Props) {
   const [localError, setLocalError] = useState<string | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const imagesRef = useRef(new Map<string, File>())
   const urlsRef = useRef<string[]>([])
+  /** CR-014：图片 chip 的统一编号文案，删除不复用编号。 */
+  const imageCounterRef = useRef(0)
+  /** 悬停预览挂在 body 上，避免被编辑区的 overflow 裁剪；提交 / 卸载时统一清理。 */
+  const previewsRef = useRef<HTMLElement[]>([])
 
   useEffect(() => () => {
     urlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    previewsRef.current.forEach((node) => node.remove())
   }, [])
 
   /** 文件选择与粘贴共用：类型、大小、数量三重校验。 */
@@ -61,11 +75,12 @@ export default function Composer({ disabled, busy, guideMode, onSubmit, modelSlo
     return true
   }
 
-  /** 在光标处插入图片缩略图；位置即提交时的图文顺序。 */
+  /** 在光标处插入图片 chip；位置即提交时的图文顺序。CR-014 起默认只显示统一文案 + 图标。 */
   const insertChip = (file: File) => {
     const editor = editorRef.current
     if (!editor) return
     const id = `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const label = `图片 ${++imageCounterRef.current}`
     imagesRef.current.set(id, file)
     const url = URL.createObjectURL(file)
     urlsRef.current.push(url)
@@ -74,9 +89,17 @@ export default function Composer({ disabled, busy, guideMode, onSubmit, modelSlo
     chip.className = 'img-chip'
     chip.contentEditable = 'false'
     chip.dataset.imgId = id
-    const thumb = document.createElement('img')
-    thumb.src = url
-    thumb.alt = file.name || '图片'
+    chip.tabIndex = 0
+    chip.setAttribute('aria-label', label)
+
+    const icon = document.createElement('span')
+    icon.className = 'chip-icon'
+    icon.setAttribute('aria-hidden', 'true')
+    icon.textContent = '🖼'
+    const text = document.createElement('span')
+    text.className = 'chip-label'
+    text.textContent = label
+
     const remove = document.createElement('button')
     remove.type = 'button'
     remove.className = 'chip-remove'
@@ -87,9 +110,40 @@ export default function Composer({ disabled, busy, guideMode, onSubmit, modelSlo
       event.stopPropagation()
       chip.remove()
       imagesRef.current.delete(id)
+      preview.remove()
+      previewsRef.current = previewsRef.current.filter((node) => node !== preview)
       URL.revokeObjectURL(url)
     })
-    chip.append(thumb, remove)
+
+    // 悬停 / 键盘聚焦才展示具体内容：缩略图 + 原始文件名与大小。
+    // 挂到 body 并用 fixed 定位，避免被 .composer-editor 的 overflow-y 裁剪。
+    const preview = document.createElement('span')
+    preview.className = 'chip-preview'
+    const thumb = document.createElement('img')
+    thumb.src = url
+    thumb.alt = file.name || label
+    const meta = document.createElement('span')
+    meta.className = 'chip-meta'
+    meta.textContent = `${file.name || '粘贴的图片'} · ${Math.max(1, Math.round(file.size / 1024))} KB`
+    preview.append(thumb, meta)
+    document.body.appendChild(preview)
+    previewsRef.current.push(preview)
+    chip.title = meta.textContent
+
+    const showPreview = () => {
+      const rect = chip.getBoundingClientRect()
+      const height = preview.offsetHeight || 190
+      preview.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 210))}px`
+      preview.style.top = `${rect.top - height - 8 > 8 ? rect.top - height - 8 : rect.bottom + 8}px`
+      preview.classList.add('visible')
+    }
+    const hidePreview = () => preview.classList.remove('visible')
+    chip.addEventListener('mouseenter', showPreview)
+    chip.addEventListener('mouseleave', hidePreview)
+    chip.addEventListener('focus', showPreview)
+    chip.addEventListener('blur', hidePreview)
+
+    chip.append(icon, text, remove)
 
     const selection = window.getSelection()
     let range: Range | null = null
@@ -220,12 +274,14 @@ export default function Composer({ disabled, busy, guideMode, onSubmit, modelSlo
       return
     }
     setLocalError(null)
-    onSubmit(text, hint.trim(), images, images.length > 0 ? parts : [])
+    // CR-051：难度输入框已移除，hint 恒为空；字段 / 接口 / 落库 / 历史回显与重新生成沿用不变。
+    onSubmit(text, '', images, images.length > 0 ? parts : [])
     if (editorRef.current) editorRef.current.innerHTML = ''
     imagesRef.current.clear()
     urlsRef.current.forEach((url) => URL.revokeObjectURL(url))
     urlsRef.current = []
-    setHint('')
+    previewsRef.current.forEach((node) => node.remove())
+    previewsRef.current = []
   }
 
   return (
@@ -246,23 +302,46 @@ export default function Composer({ disabled, busy, guideMode, onSubmit, modelSlo
         />
         <div className="composer-toolbar">
           <div className="composer-toolbar-main">
-            {modelSlot}
-            <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={pick} disabled={disabled || busy} />
-            <input
-              className="hint-input"
-              placeholder="难度 / 讲解要求（可选），如：用初学者能懂的话"
-              value={hint}
-              onChange={(e) => setHint(e.target.value)}
+            {/* CR-051：上传图片 + 技能收进单个「+」菜单；学科改图标按钮 + 设置浮层。 */}
+            <ComposerPlusMenu
+              onPickFiles={() => inputRef.current?.click()}
+              skillPanel={skillSlot}
               disabled={disabled || busy}
             />
+            {subjectSlot}
+            {/* 文件选择由加号菜单触发；隐藏 input 保留既有校验、chip 与提交链路。 */}
+            <input ref={inputRef} type="file" hidden accept="image/png,image/jpeg,image/webp"
+              multiple onChange={pick} disabled={disabled || busy} />
           </div>
           <div className="composer-toolbar-actions">
-            <span className="mode-tag">{guideMode === 1 ? '仅思路' : '完整解答'}</span>
-            <button type="submit" className="btn primary" disabled={disabled || busy}>{busy ? '生成中…' : '提交题目'}</button>
+            <GuideModeSelector mode={guideMode} onChange={onGuideModeChange} disabled={busy} />
+            {modelSlot}
+            {/* CR-053：生成中把发送按钮换成可点击的「停止」，完成后自动恢复。 */}
+            {busy ? (
+              <button type="button" className="btn send-btn stop-btn"
+                title="停止生成" aria-label="停止生成" disabled={!onStop}
+                onClick={(event) => { event.preventDefault(); onStop?.() }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                <span>停止</span>
+              </button>
+            ) : (
+              <button type="submit" className="btn primary send-btn"
+                title="发送内容" aria-label="发送内容" disabled={disabled}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M22 2 11 13" />
+                  <path d="M22 2 15 22 11 13 2 9z" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
-      <p className="composer-footnote">切换仅影响当前会话，新会话继承全局默认模型</p>
+      {/* TCR-060：删除「切换仅影响当前会话，新会话继承全局默认模型」说明行。 */}
+      {/* CR-034：AI 生成说明统一放在输入框下方，消息内不再显示。 */}
+      <p className="composer-ai-note">内容由 AI 生成，请核实重要信息</p>
     </form>
   )
 }

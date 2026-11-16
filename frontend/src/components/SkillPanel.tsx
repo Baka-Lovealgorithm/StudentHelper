@@ -6,8 +6,9 @@ import {
   createSkill, deleteSkill, importSkillFolder, listSkills, setSkillEnabled,
   type SkillItem,
 } from '../api/skills'
+import RowActionMenu from './RowActionMenu'
 
-/** T-302 技能：CR-011 支持文件夹导入、单独启停、开启优先排序与状态展示。 */
+/** T-302 技能：CR-011 文件夹导入 / 单独启停；CR-014 两个新增入口统一右上角、卡片只留描述。 */
 export default function SkillPanel() {
   const [items, setItems] = useState<SkillItem[]>([])
   const [name, setName] = useState('')
@@ -16,6 +17,7 @@ export default function SkillPanel() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
+  const [showManual, setShowManual] = useState(false)
   const folderRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -75,17 +77,47 @@ export default function SkillPanel() {
           <h2>解题技能</h2>
           <p className="muted">
             技能是一段写作 / 讲解约定，启用后追加到 System Prompt，只约束做法、不改变六段结构；
-            开启的排在前面，注入最多 2 条、每条截断 800 字。
+            按创建顺序固定展示，注入最多 2 条、每条截断 800 字。
           </p>
         </div>
-        <div className="row-actions">
+        <div className="row-actions panel-head-actions">
           <input ref={folderRef} type="file" multiple style={{ display: 'none' }} onChange={handleFolder} />
+          <button type="button" className="btn" aria-expanded={showManual}
+            onClick={() => setShowManual((previous) => !previous)}>
+            {showManual ? '收起新增' : '手动新增技能'}
+          </button>
           <button type="button" className="btn primary" disabled={importing}
             onClick={() => folderRef.current?.click()}>
             {importing ? '导入中…' : '从文件夹导入'}
           </button>
         </div>
       </div>
+
+      {showManual && (
+        <div className="skill-manual-form">
+          <label className="field">名称
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：复杂度标注" />
+          </label>
+          <label className="field">说明（可选）
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="一句话说明用途" />
+          </label>
+          <label className="field">技能内容
+            <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)}
+              placeholder="例如：每个算法都显式标注时间与空间复杂度，并说明最坏情况。" />
+          </label>
+          <div className="message-actions">
+            <button type="button" className="btn primary" onClick={() => run(async () => {
+              await createSkill({ name, description: description || undefined, content, enabled: true })
+              setName('')
+              setDescription('')
+              setContent('')
+              setShowManual(false)
+            }, '技能已新增并启用')}>
+              新增技能
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && <p className="error banner">操作失败：{error}</p>}
       {notice && <p className="ok">{notice}</p>}
@@ -104,8 +136,7 @@ export default function SkillPanel() {
                   {item.enabled ? '已启用' : '已停用'}
                 </span>
               </div>
-              {item.description && <p className="muted">{item.description}</p>}
-              <pre className="profile-raw">{item.content.slice(0, 160)}{item.content.length > 160 ? '…' : ''}</pre>
+              {item.description && <p className="muted skill-description">{item.description}</p>}
             </div>
             <div className="row-actions">
               <button type="button" className={item.enabled ? 'switch on' : 'switch'}
@@ -115,37 +146,16 @@ export default function SkillPanel() {
                   item.enabled ? `已停用「${item.name}」` : `已启用「${item.name}」`)}>
                 <span className="switch-knob" />
               </button>
-              <button type="button" className="btn small danger"
-                onClick={() => run(() => deleteSkill(item.id), '已删除')}>删除</button>
+              <RowActionMenu
+                label={`技能操作：${item.name}`}
+                items={[{ key: 'delete', label: '删除技能', danger: true,
+                  onSelect: () => run(() => deleteSkill(item.id), '已删除') }]}
+              />
             </div>
           </li>
         ))}
-        {items.length === 0 && <li className="muted">暂无技能，可从文件夹导入或在下方手写。</li>}
+        {items.length === 0 && <li className="muted">暂无技能，可从文件夹导入或手动新增。</li>}
       </ul>
-
-      <details className="skill-manual">
-        <summary>手动新增技能</summary>
-        <label className="field">名称
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：复杂度标注" />
-        </label>
-        <label className="field">说明（可选）
-          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="一句话说明用途" />
-        </label>
-        <label className="field">技能内容
-          <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)}
-            placeholder="例如：每个算法都显式标注时间与空间复杂度，并说明最坏情况。" />
-        </label>
-        <div className="message-actions">
-          <button type="button" className="btn" onClick={() => run(async () => {
-            await createSkill({ name, description: description || undefined, content, enabled: true })
-            setName('')
-            setDescription('')
-            setContent('')
-          }, '技能已新增并启用')}>
-            新增技能
-          </button>
-        </div>
-      </details>
     </section>
   )
 }

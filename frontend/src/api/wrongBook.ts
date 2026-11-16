@@ -1,4 +1,4 @@
-import { unwrap } from './client'
+import { del, get, unwrap } from './client'
 
 export interface WrongBookItem {
   feedbackId: number
@@ -26,10 +26,10 @@ export async function markWrong(messageId: number, subject?: string, note?: stri
 }
 
 export async function listWrongBook(query: WrongBookQuery = {}): Promise<WrongBookItem[]> {
-  const params = new URLSearchParams()
-  Object.entries(query).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') params.set(key, String(value))
-  })
-  const suffix = params.toString()
-  return unwrap<WrongBookItem[]>(await fetch(`/api/wrong-book${suffix ? `?${suffix}` : ''}`))
+  return get<WrongBookItem[]>('/api/wrong-book', { ...query })
+}
+
+/** CR-022：单条错题删除——只删标记行，消息、会话与图片不受影响。 */
+export async function deleteWrongBook(feedbackId: number): Promise<void> {
+  await del(`/api/wrong-book/${feedbackId}`)
 }

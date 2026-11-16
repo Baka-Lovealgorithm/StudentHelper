@@ -1,37 +1,17 @@
 import type { ReactNode } from 'react'
 
-export type ViewKey =
-  | 'chat' | 'config' | 'usage' | 'features' | 'knowledge' | 'profile'
-  | 'wrongBook' | 'subject' | 'skill' | 'mcp' | 'stats'
+import { NAV_KEYS, VIEWS, type ViewDef, type ViewKey } from '../views'
 
-interface NavItem {
-  key: ViewKey
-  label: string
-  icon: string
-  /** 受哪个功能开关控制；为空表示常驻可用。 */
-  feature?: string
-  group: 'main' | 'manage' | 'settings'
-}
+export type { ViewKey }
+export { NAV_KEYS }
 
-/** 侧边栏导航：所有功能入口常驻，受开关控制的在关闭态置灰。 */
-const NAV_ITEMS: NavItem[] = [
-  { key: 'chat', label: '对话', icon: '💬', group: 'main' },
-  { key: 'skill', label: '技能', icon: '🧩', feature: 'skill', group: 'manage' },
-  { key: 'mcp', label: 'MCP 工具', icon: '🔌', feature: 'mcp', group: 'manage' },
-  { key: 'usage', label: '用量看板', icon: '📊', feature: 'usagePanel', group: 'manage' },
-  { key: 'wrongBook', label: '错题本', icon: '📕', feature: 'wrongBook', group: 'manage' },
-  { key: 'config', label: '模型配置', icon: '⚙️', group: 'manage' },
-  { key: 'knowledge', label: '知识点', icon: '📚', feature: 'knowledgeExtract', group: 'manage' },
-  { key: 'profile', label: '记忆画像', icon: '🧠', feature: 'memory', group: 'manage' },
-  { key: 'stats', label: '学情统计', icon: '📈', feature: 'learningStats', group: 'manage' },
-  { key: 'subject', label: '学科', icon: '🎓', feature: 'subjectTemplate', group: 'manage' },
-  { key: 'features', label: '功能开关', icon: '🎛️', group: 'settings' },
-]
-
-const GROUP_LABELS: Record<NavItem['group'], string> = {
+/** CR-070：分组标题；顺序由 `VIEWS` 数组顺序决定（工作区 → 基础设置 → 学科 → 个性化 → 数据统计）。 */
+const GROUP_LABELS: Record<ViewDef['group'], string> = {
   main: '工作区',
-  manage: '功能',
-  settings: '设置',
+  basics: '基础设置',
+  subject: '学科',
+  personal: '个性化',
+  data: '数据统计',
 }
 
 interface Props {
@@ -47,7 +27,7 @@ interface Props {
 export default function Sidebar({
   view, onViewChange, features, collapsed, onToggleCollapsed, sessionSlot,
 }: Props) {
-  let lastGroup: NavItem['group'] | null = null
+  let lastGroup: ViewDef['group'] | null = null
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -65,7 +45,7 @@ export default function Sidebar({
       </div>
 
       <nav className="side-nav">
-        {NAV_ITEMS.map((item) => {
+        {VIEWS.map((item) => {
           const enabled = !item.feature || Boolean(features[item.feature])
           const showGroup = !collapsed && item.group !== lastGroup
           lastGroup = item.group

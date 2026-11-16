@@ -8,6 +8,7 @@
  */
 import assert from 'node:assert/strict'
 import { prepareMarkdown, normalizeMath, degradeCjkOnlyMath } from '../src/utils/mathText.ts'
+import { upgradeKatexSizingClasses } from '../src/utils/katexClassCompat.ts'
 
 // 1) 会话 22 第 9 轮：\boxed{\text{栈为空}} 必须降级成普通文本，不再进入 KaTeX
 const bad = '## ⑤ 最终答案\n\n用栈判断括号匹配时，扫描结束后的合法条件是：\n\n\\[\n\\boxed{\\text{栈为空}}\n\\]\n\n完整地说……'
@@ -26,11 +27,30 @@ assert.equal(
   'display 公式应恰好以两个 $ 收尾，数学命令不能丢',
 )
 
-// 3) 普通公式 / 行内公式 / 纯文本不受影响
+// 3) 普通公式 / 行内公式 / 纯文本不受影响；CR-055：KaTeX 类名映射精确且幂等
 assert.equal(normalizeMath('\\(x^2\\)'), '$x^2$')
 assert.equal(normalizeMath('\\[x^2\\]'), '$$x^2$$')
 assert.equal(normalizeMath('普通文字'), '普通文字')
 assert.equal(degradeCjkOnlyMath('$$x^2 + 1$$'), '$$x^2 + 1$$')
+const hast = {
+  type: 'root',
+  children: [{
+    type: 'element', tagName: 'span',
+    properties: { className: ['sizing', 'reset-size6', 'size3', 'mtight'] },
+    children: [{
+      type: 'element', tagName: 'span',
+      properties: { className: 'sizing reset-size3 size1' }, children: [],
+    }],
+  }],
+}
+assert.equal(upgradeKatexSizingClasses(hast), 2, '两个含旧类名的节点应被升级')
+assert.deepEqual(hast.children[0].properties.className,
+  ['katex-sizing', 'reset-size6', 'size3', 'mtight'], '数组形态只改独立 sizing 项')
+assert.equal(hast.children[0].children[0].properties.className,
+  'katex-sizing reset-size3 size1', '字符串形态同样生效')
+assert.equal(upgradeKatexSizingClasses(hast), 0, '重复执行幂等')
+const untouched = { type: 'root', properties: { className: ['size3', 'sizing2', 'fontsize-ensurer'] }, children: [] }
+assert.equal(upgradeKatexSizingClasses(untouched), 0, '相似类名与其它类名不误伤')
 
 // 4) 含数字的中文文本盒仍是公式，不误伤
 const withNumber = '$$\\boxed{\\text{最大值为 }5}$$'

@@ -41,7 +41,3 @@ export async function addMemory(kind: string, content: string, sourceSessionId?:
 export async function disableMemory(id: number): Promise<boolean> {
   return unwrap<boolean>(await fetch(`/api/memories/${id}`, { method: 'DELETE' }))
 }
-
-function fetch(input: string, init?: RequestInit): Promise<Response> {
-  return fetch(input, init)
-}
