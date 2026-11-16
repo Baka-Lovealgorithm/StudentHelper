@@ -68,6 +68,20 @@ public class WrongBookApplicationService {
         return wrongBookRepository.query(subject, parseStart(from), parseEnd(to), page, size);
     }
 
+    /**
+     * CR-022：单条错题删除。只删 {@code t_message_feedback} 中该条 WRONG 记录，
+     * 不动消息、会话与图片；会话里可再次标记。
+     */
+    public void delete(Long feedbackId) {
+        features.requireEnabled(S2Feature.WRONG_BOOK);
+        if (feedbackId == null || feedbackId <= 0) {
+            throw new BusinessException(ErrorCode.E1004, "feedbackId 不合法");
+        }
+        if (wrongBookRepository.delete(feedbackId) == 0) {
+            throw new BusinessException(ErrorCode.E1005, "错题记录不存在或已被删除");
+        }
+    }
+
     private static LocalDateTime parseStart(String value) {
         if (value == null || value.isBlank()) {
             return null;

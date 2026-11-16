@@ -9,6 +9,8 @@ import com.ai.studenthelper.common.dto.SessionModelRequest;
 import com.ai.studenthelper.common.dto.SessionPageResponse;
 import com.ai.studenthelper.common.dto.SessionRenameRequest;
 import com.ai.studenthelper.common.dto.SessionResponse;
+import com.ai.studenthelper.common.dto.SessionSkillsRequest;
+import com.ai.studenthelper.common.dto.SessionSubjectRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -83,10 +85,25 @@ public class SessionController {
         return ApiResponse.ok(service.rename(id, request.title()));
     }
 
+    /** CR-018：会话级学科三态（AUTO / MANUAL / OFF），只影响当前会话。 */
+    @PatchMapping("/sessions/{id}/subject")
+    public ApiResponse<SessionResponse> setSubject(@PathVariable Long id,
+                                                    @RequestBody(required = false) SessionSubjectRequest request) {
+        return ApiResponse.ok(service.setSubject(id, request == null ? null : request.mode(),
+                request == null ? null : request.subjectSkillId()));
+    }
+
     /** CR-012：只切换当前会话选用的模型条目，不影响其它会话。 */
     @PatchMapping("/sessions/{id}/model")
     public ApiResponse<SessionResponse> setModel(@PathVariable Long id,
                                                  @RequestBody(required = false) SessionModelRequest request) {
         return ApiResponse.ok(service.setModel(id, request == null ? null : request.modelId()));
+    }
+
+    /** CR-038：设置 / 清除当前会话固化的通用技能（空数组回到模型按需）。 */
+    @PatchMapping("/sessions/{id}/skills")
+    public ApiResponse<SessionResponse> setSkills(@PathVariable Long id,
+                                                  @RequestBody(required = false) SessionSkillsRequest request) {
+        return ApiResponse.ok(service.setSkills(id, request == null ? null : request.skillIds()));
     }
 }

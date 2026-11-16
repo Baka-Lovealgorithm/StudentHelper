@@ -33,6 +33,15 @@ public class Message {
     private Integer completionTokens;
     @Column("duration_ms")
     private Integer durationMs;
+    /** CR-018：该回答所用输出结构；NULL 按默认六段，FREE_TEXT 为追问自由文本。 */
+    @Column("section_schema")
+    private String sectionSchema;
+    /** CR-018：该回答采用的学科与结构标签，供前端「本次采用」展示。 */
+    @Column("subject_label")
+    private String subjectLabel;
+    /** CR-039：本轮回答形态（SOLVE / FOLLOW_UP / EXPLAIN）；历史行为 NULL，按 section_schema 推断。 */
+    @Column("intent")
+    private String intent;
     @Column("created_at")
     private LocalDateTime createdAt;
 
@@ -62,6 +71,12 @@ public class Message {
     public void setCompletionTokens(Integer completionTokens) { this.completionTokens = completionTokens; }
     public Integer getDurationMs() { return durationMs; }
     public void setDurationMs(Integer durationMs) { this.durationMs = durationMs; }
+    public String getSectionSchema() { return sectionSchema; }
+    public void setSectionSchema(String sectionSchema) { this.sectionSchema = sectionSchema; }
+    public String getSubjectLabel() { return subjectLabel; }
+    public void setSubjectLabel(String subjectLabel) { this.subjectLabel = subjectLabel; }
+    public String getIntent() { return intent; }
+    public void setIntent(String intent) { this.intent = intent; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

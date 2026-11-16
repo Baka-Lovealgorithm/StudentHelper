@@ -178,6 +178,7 @@ public class ModelProviderApplicationService {
         TreeSet<String> unique = new TreeSet<>(names);
         boolean vision = Boolean.TRUE.equals(request.visionSupported());
         boolean stream = request.streamSupported() == null || request.streamSupported();
+        boolean debug = Boolean.TRUE.equals(request.isDebug());
         List<ProviderModelResponse> added = new ArrayList<>();
         for (String name : unique) {
             if (repository.modelNameExists(providerId, name, null)) {
@@ -186,9 +187,9 @@ public class ModelProviderApplicationService {
                 }
                 continue;
             }
-            Long id = repository.insertModel(providerId, name, vision, stream, request.extraOptions(), false);
+            Long id = repository.insertModel(providerId, name, vision, stream, request.extraOptions(), false, debug);
             added.add(new ProviderModelResponse(id, providerId, name, vision, stream,
-                    request.extraOptions(), false));
+                    request.extraOptions(), false, debug));
         }
         if (repository.findDefaultModelId() == null && !added.isEmpty()) {
             repository.clearDefault();
@@ -209,8 +210,10 @@ public class ModelProviderApplicationService {
         boolean vision = request.visionSupported() == null ? model.visionSupported() : request.visionSupported();
         boolean stream = request.streamSupported() == null ? model.streamSupported() : request.streamSupported();
         String extra = request.extraOptions() == null ? model.extraOptions() : request.extraOptions();
-        repository.updateModel(modelId, name, vision, stream, extra);
-        return new ProviderModelResponse(modelId, providerId, name, vision, stream, extra, model.isDefault());
+        boolean debug = request.isDebug() == null ? model.debug() : request.isDebug();
+        repository.updateModel(modelId, name, vision, stream, extra, debug);
+        return new ProviderModelResponse(modelId, providerId, name, vision, stream, extra,
+                model.isDefault(), debug);
     }
 
     @Transactional
@@ -314,6 +317,6 @@ public class ModelProviderApplicationService {
 
     private static ProviderModelResponse toModelResponse(ModelProviderRepository.ModelRow m) {
         return new ProviderModelResponse(m.id(), m.providerId(), m.modelName(), m.visionSupported(),
-                m.streamSupported(), m.extraOptions(), m.isDefault());
+                m.streamSupported(), m.extraOptions(), m.isDefault(), m.debug());
     }
 }

@@ -28,9 +28,10 @@ public class SkillRepository {
         this.plainJdbc = plainJdbc;
     }
 
+    /** CR-052：列表按 id / 创建顺序固定展示，不随启用状态变化（取代 CR-011 的「开启优先」）。 */
     public List<SkillResponse> findAll() {
         return jdbc.query("SELECT id, name, description, content, enabled, updated_at FROM t_skill "
-                        + "ORDER BY enabled DESC, id ASC",
+                        + "ORDER BY id ASC",
                 new MapSqlParameterSource(), (rs, i) -> map(rs));
     }
 
@@ -38,6 +39,15 @@ public class SkillRepository {
         return jdbc.query("SELECT id, name, description, content, enabled, updated_at FROM t_skill "
                         + "WHERE enabled = 1 ORDER BY id ASC LIMIT " + Math.max(1, limit),
                 new MapSqlParameterSource(), (rs, i) -> map(rs));
+    }
+
+    /** CR-026：skill_get 按名称精确读取，停用技能不可被读入。 */
+    public Optional<SkillResponse> findEnabledByName(String name) {
+        List<SkillResponse> rows = jdbc.query(
+                "SELECT id, name, description, content, enabled, updated_at FROM t_skill "
+                        + "WHERE enabled = 1 AND name = :name LIMIT 1",
+                new MapSqlParameterSource("name", name), (rs, i) -> map(rs));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
     public Optional<SkillResponse> findById(Long id) {
@@ -80,7 +90,7 @@ public class SkillRepository {
                         .addValue("enabled", enabled == null ? null : (enabled ? 1 : 0)));
     }
 
-    /** CR-011：单独启停，不触碰名称 / 正文；列表按 enabled DESC 自动把启用的排前面。 */
+    /** CR-011：单独启停，不触碰名称 / 正文；CR-052：列表固定按 id 排序，启停不改变展示位置。 */
     public void setEnabled(Long id, boolean enabled) {
         jdbc.update("UPDATE t_skill SET enabled = :enabled, updated_at = NOW(3) WHERE id = :id",
                 new MapSqlParameterSource().addValue("id", id).addValue("enabled", enabled ? 1 : 0));

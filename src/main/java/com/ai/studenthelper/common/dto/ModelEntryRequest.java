@@ -12,6 +12,7 @@ public record ModelEntryRequest(
         List<String> modelNames,
         Boolean visionSupported,
         Boolean streamSupported,
-        String extraOptions
+        String extraOptions,
+        Boolean isDebug
 ) {
 }

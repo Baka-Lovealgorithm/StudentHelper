@@ -1,11 +1,16 @@
 package com.ai.studenthelper.controller;
 
+import com.ai.studenthelper.application.ActiveGenerationRegistry;
 import com.ai.studenthelper.application.ChatApplicationService;
+import com.ai.studenthelper.application.GenerationCancellation;
 import com.ai.studenthelper.application.SolutionStreamSink;
 import com.ai.studenthelper.common.dto.ChatCommand;
+import com.ai.studenthelper.config.AppProperties;
 import com.ai.studenthelper.common.dto.ContentPart;
 import com.ai.studenthelper.common.dto.DonePayload;
 import com.ai.studenthelper.common.dto.ImagePayload;
+import com.ai.studenthelper.common.dto.ProcessItem;
+import com.ai.studenthelper.common.ApiResponse;
 import com.ai.studenthelper.common.BusinessException;
 import com.ai.studenthelper.common.ErrorCode;
 import com.ai.studenthelper.common.ImageFileValidator;
@@ -37,12 +42,22 @@ public class ChatController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    /**
+     * CR-049 / D-15：emitter 比应用层 latch 晚 15s 超时，给 handleFailure 的 error 事件留窗口。
+     * 改造前两者同为 60s，超时瞬间 emitter 已 complete，error 发不出去。
+     */
+    static final long EMITTER_GRACE_MS = 15_000L;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final ChatApplicationService service;
+    private final AppProperties properties;
+    private final ActiveGenerationRegistry registry;
 
-    public ChatController(ChatApplicationService service) {
+    public ChatController(ChatApplicationService service, AppProperties properties,
+                          ActiveGenerationRegistry registry) {
         this.service = service;
+        this.properties = properties;
+        this.registry = registry;
     }
 
     @PostMapping(value = "/api/chat/stream",
@@ -53,25 +68,42 @@ public class ChatController {
                              @RequestParam(value = "hint", required = false) String hint,
                              @RequestParam(value = "guideMode", defaultValue = "0") int guideMode,
                              @RequestParam(value = "parts", required = false) String partsJson,
+                             @RequestParam(value = "practice", defaultValue = "false") boolean practice,
                              @RequestPart(value = "images", required = false) List<MultipartFile> images) {
-        SseEmitter emitter = new SseEmitter(60_000L);
+        SseEmitter emitter = new SseEmitter(
+                properties.getChat().getSseTimeoutMs() + EMITTER_GRACE_MS);
         SseSink sink = new SseSink(emitter);
+        // CR-053：把本轮生成注册进会话级注册表，供 /api/chat/cancel 按 sessionId 取消
+        GenerationCancellation cancellation = new GenerationCancellation();
+        registry.register(sessionId, cancellation);
+        CompletableFuture<Void> future;
         try {
             List<ImagePayload> payloads = readImages(images);
             ChatCommand command = new ChatCommand(sessionId, text, hint, guideMode,
-                    payloads, readParts(partsJson));
-            CompletableFuture.runAsync(() -> service.solve(command, sink))
+                    payloads, readParts(partsJson), practice);
+            future = CompletableFuture.runAsync(() -> service.solve(command, sink, cancellation))
                     .exceptionally(error -> {
                         emitUnexpectedFailure(sink, error);
                         return null;
                     });
         } catch (BusinessException e) {
+            registry.unregister(sessionId, cancellation);
             sink.onError(e.getErrorCode(), e.getDetail());
+            return emitter;
         } catch (Exception e) {
+            registry.unregister(sessionId, cancellation);
             log.error("解题请求预处理失败", e);
             sink.onError(ErrorCode.E5000, null);
+            return emitter;
         }
+        future.whenComplete((ignored, error) -> registry.unregister(sessionId, cancellation));
         return emitter;
+    }
+
+    /** CR-053：停止指定会话当前正在生成的回答；无运行中生成时返回 false，不抛业务异常。 */
+    @PostMapping("/api/chat/cancel")
+    public ApiResponse<Boolean> cancel(@RequestParam("sessionId") Long sessionId) {
+        return ApiResponse.ok(registry.cancel(sessionId));
     }
 
     /**
@@ -148,6 +180,17 @@ public class ChatController {
             data.put("text", text);
             data.put("index", index);
             send("delta", data);
+        }
+
+        @Override
+        public void onProcess(ProcessItem item) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("seq", item.seq());
+            data.put("kind", item.kind());
+            data.put("title", item.title());
+            data.put("detail", item.detail() == null ? "" : item.detail());
+            data.put("elapsedMs", item.elapsedMs());
+            send("process", data);
         }
 
         @Override

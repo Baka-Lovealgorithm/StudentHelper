@@ -1,6 +1,7 @@
 package com.ai.studenthelper.application;
 
 import com.ai.studenthelper.common.dto.DonePayload;
+import com.ai.studenthelper.common.dto.ProcessItem;
 import com.ai.studenthelper.common.ErrorCode;
 import com.ai.studenthelper.domain.enums.AgentStage;
 
@@ -12,6 +13,10 @@ public interface SolutionStreamSink {
     void onStatus(AgentStage stage);
 
     void onDelta(String text, int index);
+
+    /** CR-027：模型行为过程；默认空实现，记录桩 / 单测无需感知新增事件。 */
+    default void onProcess(ProcessItem item) {
+    }
 
     void onDone(DonePayload payload);
 

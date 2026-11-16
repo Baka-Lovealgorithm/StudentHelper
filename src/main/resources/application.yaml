@@ -30,11 +30,30 @@ studenthelper:
   storage:
     image-dir: ./data/images
   chat:
-    sse-timeout-ms: 60000
-    hard-timeout-ms: 45000
+    # CR-049 / D-15：带图长推导可超过 60s，原值会把答案连同 error 事件一起吞掉。
+    # SseEmitter 由 ChatController 在此值上再 +15s，保证超时时 error 事件发得出去。
+    sse-timeout-ms: 180000
+    hard-timeout-ms: 180000
     max-images-per-message: 4
   crypto:
     master-key: ${STUDENTHELPER_MASTER_KEY:}
     master-key-file: ./data/.master_key
   startup:
     db-check: ${STUDENTHELPER_DB_CHECK:true}
+  # CR-047：作图工具的后端渲染参数（Chrome / Edge 无头截图）
+  diagram:
+    # 留空则按 Program Files / LOCALAPPDATA 下 Chrome、Edge 的常见路径自动探测
+    chrome-path: ${STUDENTHELPER_CHROME_PATH:}
+    work-dir: ./data/diagram
+    timeout-ms: 15000
+    max-code-chars: 4000
+    window-width: 1400
+    window-height: 1100
+    scale: 2
+    virtual-time-budget-ms: 8000
+  # 长期记忆与对话压缩（技术规范 5.10）。图源码只落 t_message_process、不进对话上下文，
+  # 因此默认阈值不变；若需要更长上下文，直接调大下面两个 trigger 值即可，无需改代码。
+  memory:
+    compaction-trigger-messages: 30
+    compaction-trigger-tokens: 12000
+    compaction-keep-messages: 10

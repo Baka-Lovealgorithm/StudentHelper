@@ -82,7 +82,8 @@ public class ModelProviderMigration implements ApplicationRunner {
                     continue;
                 }
                 Long modelId = repository.insertModel(providerId, row.modelName(),
-                        row.visionSupported() == 1, row.streamSupported() == 1, row.extraOptions(), false);
+                        row.visionSupported() == 1, row.streamSupported() == 1, row.extraOptions(),
+                        false, false);
                 modelCount++;
                 if (firstModelId == null) {
                     firstModelId = modelId;

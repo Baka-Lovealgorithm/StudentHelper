@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS t_call_log (
   model_name        VARCHAR(200) NULL,
   prompt_tokens     INT         NULL,
   completion_tokens INT         NULL,
+  cache_hit_tokens  INT         NOT NULL DEFAULT 0,
+  cache_miss_tokens INT         NOT NULL DEFAULT 0,
   duration_ms       INT         NULL,
   status            VARCHAR(16) NOT NULL,
   error_summary     VARCHAR(500) NULL,

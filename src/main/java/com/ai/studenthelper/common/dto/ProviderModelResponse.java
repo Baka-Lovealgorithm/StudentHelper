@@ -8,6 +8,7 @@ public record ProviderModelResponse(
         boolean visionSupported,
         boolean streamSupported,
         String extraOptions,
-        boolean isDefault
+        boolean isDefault,
+        boolean isDebug
 ) {
 }

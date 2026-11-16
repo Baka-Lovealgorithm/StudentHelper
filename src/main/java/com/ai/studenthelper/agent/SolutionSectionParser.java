@@ -2,6 +2,7 @@ package com.ai.studenthelper.agent;
 
 import com.ai.studenthelper.common.BusinessException;
 import com.ai.studenthelper.common.ErrorCode;
+import com.ai.studenthelper.common.SectionSchema;
 import com.ai.studenthelper.domain.enums.GuideMode;
 import org.springframework.stereotype.Component;
 
@@ -21,12 +22,26 @@ public class SolutionSectionParser {
     public record ParseResult(List<Section> sections) {
     }
 
+    /** 关闭态 / OFF / 历史 NULL 消息：默认六段，与 S1 逐字一致（AC-204-1）。 */
     public ParseResult parse(String text, GuideMode mode) {
+        return parse(text, mode, SectionSchema.defaultSchema());
+    }
+
+    /** CR-018：按当前 sections_json 声明的有序标题切段与校验。 */
+    public ParseResult parse(String text, GuideMode mode, SectionSchema schema) {
+        List<String> titles = (schema == null ? SectionSchema.defaultSchema() : schema).titlesFor(mode);
+        return parse(text, titles);
+    }
+
+    /** CR-039：直接按标题数组切段（讲解轮传 explain 数组，不区分引导模式）。 */
+    public ParseResult parse(String text, List<String> titles) {
         if (text == null || text.isBlank()) {
             throw new BusinessException(ErrorCode.E2005);
         }
-        // T-204 / T-306：开启可选段落或一题多解时，「## 补充：」「## 附加：」之后的内容不参与 ①~⑥ 校验，
+        // T-306 一题多解与历史 T-204 补充段落：「## 补充：」「## 附加：」之后的内容不参与 ①~⑥ 校验，
         // 避免 ⑥ 段混入扩展内容而误判；落库仍保留完整原文。
+        // CR-024 退役可选输出段落时**刻意保留**该截断逻辑——历史回答里已有「## 补充：」标题，
+        // 删掉会让旧消息被判为结构不完整（E2005）。
         int optionalAt = text.indexOf("\n## 补充：");
         int extraAt = text.indexOf("\n## 附加：");
         int cutAt;
@@ -38,7 +53,6 @@ public class SolutionSectionParser {
             cutAt = Math.min(optionalAt, extraAt);
         }
         String core = cutAt > 0 ? text.substring(0, cutAt) : text;
-        List<String> titles = SolverPromptTemplate.titlesFor(mode);
         List<Section> sections = new ArrayList<>();
         for (int i = 0; i < titles.size(); i++) {
             String title = titles.get(i);

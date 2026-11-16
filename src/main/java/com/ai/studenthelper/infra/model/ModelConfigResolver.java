@@ -27,7 +27,8 @@ public class ModelConfigResolver {
             String modelName,
             boolean visionSupported,
             boolean streamSupported,
-            String extraOptions
+            String extraOptions,
+            boolean debug
     ) {
     }
 
@@ -67,7 +68,12 @@ public class ModelConfigResolver {
         return resolveCurrent();
     }
 
-    /** S1 遗留语义：读旧表 is_current。新链路不再调用。 */
+    /**
+     * S1 遗留语义：读旧表 {@code is_current}。
+     *
+     * <p>CR-043：生产链路已全部改走 {@link #resolveForSession(Long)}，本方法只留给
+     * 外部依赖探针（{@code probe/*}）与旧表兼容测试验证兜底语义，<b>新代码不要调用</b>。</p>
+     */
     public ResolvedModelConfig resolveCurrent() {
         ModelConfig config = legacyRepository.findCurrent()
                 .orElseThrow(() -> new BusinessException(ErrorCode.E3002));
@@ -78,7 +84,8 @@ public class ModelConfigResolver {
                 config.getModelName(),
                 config.getVisionSupported() != null && config.getVisionSupported() == 1,
                 config.getStreamSupported() == null || config.getStreamSupported() == 1,
-                config.getExtraOptions()
+                config.getExtraOptions(),
+                false
         );
     }
 
@@ -94,7 +101,8 @@ public class ModelConfigResolver {
                         row.modelName(),
                         row.visionSupported(),
                         row.streamSupported(),
-                        row.extraOptions()))
+                        row.extraOptions(),
+                        row.debug()))
                 .orElse(null);
     }
 }

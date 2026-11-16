@@ -23,6 +23,8 @@ public class SkillApplicationService {
 
     public static final int MAX_INJECTED_SKILLS = 2;
     public static final int MAX_INJECTED_CHARS = 800;
+    /** CR-026：按需加载清单的上限，防止启用技能过多把 system prompt 撑大。 */
+    public static final int MAX_CATALOG_SKILLS = 12;
     private static final int MAX_NAME = 32;
     private static final int MAX_DESCRIPTION = 200;
     private static final int MAX_CONTENT = 5000;
@@ -49,6 +51,69 @@ public class SkillApplicationService {
             if (content.isEmpty()) {
                 continue;
             }
+            if (content.length() > MAX_INJECTED_CHARS) {
+                content = content.substring(0, MAX_INJECTED_CHARS);
+            }
+            out.add(new String[]{skill.name(), content});
+        }
+        return out;
+    }
+
+    /** CR-026：供 Prompt / `skill_list` 注入的清单 `[name, description]`，不含正文。 */
+    public List<String[]> catalog() {
+        if (!features.isEnabled(S2Feature.SKILL)) {
+            return List.of();
+        }
+        List<String[]> out = new ArrayList<>();
+        for (SkillResponse skill : repository.findEnabled(MAX_CATALOG_SKILLS)) {
+            String name = skill.name() == null ? "" : skill.name().trim();
+            String content = skill.content() == null ? "" : skill.content().trim();
+            if (name.isEmpty() || content.isEmpty()) {
+                continue;
+            }
+            String description = skill.description() == null ? "" : skill.description().trim();
+            out.add(new String[]{name, description.length() > 200 ? description.substring(0, 200) : description});
+        }
+        return out;
+    }
+
+    /** CR-026：供 `skill_get` 按名称读入；只返回启用技能，正文沿用 800 字上限。 */
+    public String contentFor(String name) {
+        if (!features.isEnabled(S2Feature.SKILL) || name == null || name.isBlank()) {
+            return null;
+        }
+        SkillResponse skill = repository.findEnabledByName(name.trim()).orElse(null);
+        if (skill == null || skill.content() == null || skill.content().isBlank()) {
+            return null;
+        }
+        String content = skill.content().trim();
+        return content.length() > MAX_INJECTED_CHARS
+                ? content.substring(0, MAX_INJECTED_CHARS) : content;
+    }
+
+    /** CR-038：供 skill_get 命中后写回会话固化；只认启用技能。 */
+    public Long enabledIdFor(String name) {
+        if (!features.isEnabled(S2Feature.SKILL) || name == null || name.isBlank()) {
+            return null;
+        }
+        return repository.findEnabledByName(name.trim()).map(SkillResponse::id).orElse(null);
+    }
+
+    /** CR-038：按会话固化 id 取启用技能正文（每条 ≤800 字、最多 2 条），供每轮注入；关闭态返回空。 */
+    public List<String[]> contentsForIds(List<Long> ids) {
+        if (!features.isEnabled(S2Feature.SKILL) || ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<String[]> out = new ArrayList<>();
+        for (Long id : ids) {
+            if (id == null || out.size() >= MAX_INJECTED_SKILLS) {
+                break;
+            }
+            SkillResponse skill = repository.findById(id).orElse(null);
+            if (skill == null || !skill.enabled() || skill.content() == null || skill.content().isBlank()) {
+                continue;
+            }
+            String content = skill.content().trim();
             if (content.length() > MAX_INJECTED_CHARS) {
                 content = content.substring(0, MAX_INJECTED_CHARS);
             }

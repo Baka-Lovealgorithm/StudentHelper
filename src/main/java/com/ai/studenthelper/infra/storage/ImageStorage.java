@@ -9,7 +9,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * 图片落盘：`./data/images/<sessionId>/<uuid>.<ext>`，DB 只存相对路径（技术规范 5.4）。
@@ -18,6 +22,9 @@ import java.util.UUID;
 public class ImageStorage {
 
     private static final Logger log = LoggerFactory.getLogger(ImageStorage.class);
+
+    private static final Pattern FILE_NAME = Pattern.compile("[A-Za-z0-9._-]+");
+    private static final Set<String> ALLOWED_EXT = Set.of(".png", ".jpg", ".jpeg", ".webp", ".gif");
 
     private final Path root;
 
@@ -37,6 +44,28 @@ public class ImageStorage {
             return base.relativize(target).toString().replace('\\', '/');
         } catch (IOException e) {
             throw new IllegalStateException("图片保存失败：sessionId=" + sessionId, e);
+        }
+    }
+
+    /**
+     * CR-027：历史图片只读解析。限定文件名字符集与扩展名白名单，并保证解析后
+     * 路径仍在 `./data/images/<sessionId>/` 内，杜绝 `../` 路径穿越（NFR-108）。
+     */
+    public Optional<Path> resolve(Long sessionId, String fileName) {
+        if (sessionId == null || fileName == null || !FILE_NAME.matcher(fileName).matches()) {
+            return Optional.empty();
+        }
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (ALLOWED_EXT.stream().noneMatch(lower::endsWith)) {
+            return Optional.empty();
+        }
+        try {
+            Path base = root.toAbsolutePath().normalize();
+            Path dir = safeChild(base, String.valueOf(sessionId));
+            Path target = safeChild(dir, fileName);
+            return Files.isRegularFile(target) ? Optional.of(target) : Optional.empty();
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
         }
     }
 

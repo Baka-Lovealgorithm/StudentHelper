@@ -37,12 +37,14 @@ public class ModelProviderRepository {
     }
 
     public record ModelRow(Long id, Long providerId, String modelName, boolean visionSupported,
-                           boolean streamSupported, String extraOptions, boolean isDefault) {
+                           boolean streamSupported, String extraOptions, boolean isDefault,
+                           boolean debug) {
     }
 
     /** 解题链路需要的完整快照（模型 + 所属厂商）。 */
     public record ResolvedRow(Long modelId, String baseUrl, String apiKeyCipher, String modelName,
-                              boolean visionSupported, boolean streamSupported, String extraOptions) {
+                              boolean visionSupported, boolean streamSupported, String extraOptions,
+                              boolean debug) {
     }
 
     /** S1 旧表 t_model_config 的迁移源行。 */
@@ -57,7 +59,7 @@ public class ModelProviderRepository {
 
     public List<ModelRow> findModels() {
         return jdbc.query("SELECT id, provider_id, model_name, vision_supported, stream_supported, "
-                        + "extra_options, is_default FROM t_provider_model ORDER BY id ASC",
+                        + "extra_options, is_default, is_debug FROM t_provider_model ORDER BY id ASC",
                 new MapSqlParameterSource(), (rs, i) -> mapModel(rs));
     }
 
@@ -68,7 +70,7 @@ public class ModelProviderRepository {
 
     public Optional<ModelRow> findModel(Long id) {
         return jdbc.query("SELECT id, provider_id, model_name, vision_supported, stream_supported, "
-                        + "extra_options, is_default FROM t_provider_model WHERE id = :id",
+                        + "extra_options, is_default, is_debug FROM t_provider_model WHERE id = :id",
                 new MapSqlParameterSource("id", id), (rs, i) -> mapModel(rs)).stream().findFirst();
     }
 
@@ -103,32 +105,36 @@ public class ModelProviderRepository {
     }
 
     public Long insertModel(Long providerId, String modelName, boolean visionSupported,
-                            boolean streamSupported, String extraOptions, boolean isDefault) {
+                            boolean streamSupported, String extraOptions, boolean isDefault,
+                            boolean debug) {
         KeyHolder holder = new GeneratedKeyHolder();
         plainJdbc.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
                     "INSERT INTO t_provider_model (provider_id, model_name, vision_supported, "
-                            + "stream_supported, extra_options, is_default, created_at, updated_at) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, NOW(3), NOW(3))", Statement.RETURN_GENERATED_KEYS);
+                            + "stream_supported, extra_options, is_default, is_debug, created_at, updated_at) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))", Statement.RETURN_GENERATED_KEYS);
             ps.setLong(1, providerId);
             ps.setString(2, modelName);
             ps.setInt(3, visionSupported ? 1 : 0);
             ps.setInt(4, streamSupported ? 1 : 0);
             ps.setString(5, extraOptions);
             ps.setInt(6, isDefault ? 1 : 0);
+            ps.setInt(7, debug ? 1 : 0);
             return ps;
         }, holder);
         return holder.getKey() == null ? null : holder.getKey().longValue();
     }
 
     public void updateModel(Long id, String modelName, boolean visionSupported,
-                            boolean streamSupported, String extraOptions) {
+                            boolean streamSupported, String extraOptions, boolean debug) {
         jdbc.update("UPDATE t_provider_model SET model_name = :name, vision_supported = :vision, "
-                        + "stream_supported = :stream, extra_options = :extra, updated_at = NOW(3) WHERE id = :id",
+                        + "stream_supported = :stream, extra_options = :extra, is_debug = :debug, "
+                        + "updated_at = NOW(3) WHERE id = :id",
                 new MapSqlParameterSource().addValue("id", id).addValue("name", modelName)
                         .addValue("vision", visionSupported ? 1 : 0)
                         .addValue("stream", streamSupported ? 1 : 0)
-                        .addValue("extra", extraOptions));
+                        .addValue("extra", extraOptions)
+                        .addValue("debug", debug ? 1 : 0));
     }
 
     public void deleteModel(Long id) {
@@ -168,14 +174,14 @@ public class ModelProviderRepository {
 
     public Optional<ResolvedRow> resolve(Long modelId) {
         return jdbc.query("SELECT m.id AS model_id, p.base_url, p.api_key_cipher, m.model_name, "
-                        + "m.vision_supported, m.stream_supported, m.extra_options "
+                        + "m.vision_supported, m.stream_supported, m.extra_options, m.is_debug "
                         + "FROM t_provider_model m JOIN t_model_provider p ON p.id = m.provider_id "
                         + "WHERE m.id = :id",
                 new MapSqlParameterSource("id", modelId),
                 (rs, i) -> new ResolvedRow(rs.getLong("model_id"), rs.getString("base_url"),
                         rs.getString("api_key_cipher"), rs.getString("model_name"),
                         rs.getInt("vision_supported") == 1, rs.getInt("stream_supported") == 1,
-                        rs.getString("extra_options"))).stream().findFirst();
+                        rs.getString("extra_options"), rs.getInt("is_debug") == 1)).stream().findFirst();
     }
 
     public Long findSessionModelId(Long sessionId) {
@@ -223,6 +229,7 @@ public class ModelProviderRepository {
     private static ModelRow mapModel(ResultSet rs) throws SQLException {
         return new ModelRow(rs.getLong("id"), rs.getLong("provider_id"), rs.getString("model_name"),
                 rs.getInt("vision_supported") == 1, rs.getInt("stream_supported") == 1,
-                rs.getString("extra_options"), rs.getInt("is_default") == 1);
+                rs.getString("extra_options"), rs.getInt("is_default") == 1,
+                rs.getInt("is_debug") == 1);
     }
 }

@@ -1,13 +1,16 @@
 package com.ai.studenthelper.controller;
 
+import com.ai.studenthelper.application.ModelConnectivityService;
 import com.ai.studenthelper.application.ModelProviderApplicationService;
 import com.ai.studenthelper.common.ApiResponse;
 import com.ai.studenthelper.common.dto.FetchModelsResponse;
 import com.ai.studenthelper.common.dto.ModelEntryRequest;
+import com.ai.studenthelper.common.dto.ModelTestResult;
 import com.ai.studenthelper.common.dto.ProviderListResponse;
 import com.ai.studenthelper.common.dto.ProviderModelResponse;
 import com.ai.studenthelper.common.dto.ProviderOptionsResponse;
 import com.ai.studenthelper.common.dto.ProviderRequest;
+import com.ai.studenthelper.common.dto.ProviderTestResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,9 +29,12 @@ import java.util.Map;
 public class ModelProviderController {
 
     private final ModelProviderApplicationService service;
+    private final ModelConnectivityService connectivity;
 
-    public ModelProviderController(ModelProviderApplicationService service) {
+    public ModelProviderController(ModelProviderApplicationService service,
+                                   ModelConnectivityService connectivity) {
         this.service = service;
+        this.connectivity = connectivity;
     }
 
     @GetMapping
@@ -91,5 +97,17 @@ public class ModelProviderController {
                                                         @PathVariable Long mid) {
         service.setDefault(pid, mid);
         return ApiResponse.ok(Map.of("defaulted", true));
+    }
+
+    /** CR-020：单模型连通性测试（真实最小对话请求；结果不落库、不计入看板）。 */
+    @PostMapping("/{pid}/models/{mid}/test")
+    public ApiResponse<ModelTestResult> testModel(@PathVariable Long pid, @PathVariable Long mid) {
+        return ApiResponse.ok(connectivity.testModel(pid, mid));
+    }
+
+    /** CR-020：厂商全部模型连通性测试（并发 4、单项 15s、整体 40s）。 */
+    @PostMapping("/{pid}/test")
+    public ApiResponse<ProviderTestResponse> testProvider(@PathVariable Long pid) {
+        return ApiResponse.ok(connectivity.testProvider(pid));
     }
 }

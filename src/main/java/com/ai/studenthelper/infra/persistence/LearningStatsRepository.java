@@ -1,19 +1,30 @@
 package com.ai.studenthelper.infra.persistence;
 
-import com.ai.studenthelper.common.dto.LearningStatsResponse.DayCount;
+import com.ai.studenthelper.common.dto.LearningStatsResponse.DayStat;
 import com.ai.studenthelper.common.dto.LearningStatsResponse.SubjectCount;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * T-305 学情统计聚合。全部为只读查询，数据源是 S1 既有表 + T-203 的知识点命中，
  * 不新建统计表、不做金额换算（FR-206 边界）。
+ *
+ * <p>CR-023：所有查询按同一窗口过滤（{@code days} = 0 表示全部，1/3/7 表示最近 N 个自然日含今天），
+ * 保证「概览计数 = 按天柱状图各行之和」可对账；token 与耗时不再参与学情统计（只留用量看板）。</p>
  */
 @Repository
 public class LearningStatsRepository {
+
+    /** 「全部」时按天图的展示上限，避免日期无限增长把图压扁。 */
+    private static final int ALL_DAYS_LIMIT = 30;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -21,67 +32,102 @@ public class LearningStatsRepository {
         this.jdbc = jdbc;
     }
 
-    public int count(String sql) {
-        Integer value = jdbc.queryForObject(sql, new MapSqlParameterSource(), Integer.class);
-        return value == null ? 0 : value;
+    public int sessions(Integer days) {
+        return count("SELECT COUNT(*) FROM t_session" + filter(days, "created_at", false), days);
     }
 
-    public int sessions() {
-        return count("SELECT COUNT(*) FROM t_session");
+    public int questions(Integer days) {
+        return count("SELECT COUNT(*) FROM t_message WHERE role = 'USER' AND status = 'SUCCESS'"
+                + filter(days, "created_at", true), days);
     }
 
-    public int questions() {
-        return count("SELECT COUNT(*) FROM t_message WHERE role = 'USER' AND status = 'SUCCESS'");
+    public int answers(Integer days) {
+        return count("SELECT COUNT(*) FROM t_message WHERE role = 'ASSISTANT' AND status = 'SUCCESS'"
+                + filter(days, "created_at", true), days);
     }
 
-    public int answers() {
-        return count("SELECT COUNT(*) FROM t_message WHERE role = 'ASSISTANT' AND status = 'SUCCESS'");
+    public int failedAnswers(Integer days) {
+        return count("SELECT COUNT(*) FROM t_message WHERE status = 'FAILED'"
+                + filter(days, "created_at", true), days);
     }
 
-    public int failedAnswers() {
-        return count("SELECT COUNT(*) FROM t_message WHERE status = 'FAILED'");
-    }
+    /**
+     * 按天三指标（提问 / 成功解答 / 失败轮次）。
+     * 窗口为 1/3/7 时**逐日补齐**缺失日期（计 0），保证柱状图 X 轴连续；
+     * 窗口为 0（全部）时只返回有数据的日期，最多最近 {@value #ALL_DAYS_LIMIT} 天。
+     */
+    public List<DayStat> byDay(Integer days) {
+        String sql = "SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS d,"
+                + " SUM(CASE WHEN role = 'USER' AND status = 'SUCCESS' THEN 1 ELSE 0 END) AS q,"
+                + " SUM(CASE WHEN role = 'ASSISTANT' AND status = 'SUCCESS' THEN 1 ELSE 0 END) AS a,"
+                + " SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS f"
+                + " FROM t_message"
+                + filter(days, "created_at", false)
+                + " GROUP BY d ORDER BY d ASC";
+        List<DayStat> rows = jdbc.query(sql, params(days),
+                (rs, i) -> new DayStat(rs.getString("d"), rs.getInt("q"), rs.getInt("a"), rs.getInt("f")));
 
-    public long promptTokens() {
-        Long value = jdbc.queryForObject(
-                "SELECT IFNULL(SUM(prompt_tokens), 0) FROM t_call_log WHERE status = 'SUCCESS'",
-                new MapSqlParameterSource(), Long.class);
-        return value == null ? 0L : value;
-    }
+        if (!hasWindow(days)) {
+            if (rows.size() <= ALL_DAYS_LIMIT) {
+                return rows;
+            }
+            return new ArrayList<>(rows.subList(rows.size() - ALL_DAYS_LIMIT, rows.size()));
+        }
 
-    public long completionTokens() {
-        Long value = jdbc.queryForObject(
-                "SELECT IFNULL(SUM(completion_tokens), 0) FROM t_call_log WHERE status = 'SUCCESS'",
-                new MapSqlParameterSource(), Long.class);
-        return value == null ? 0L : value;
-    }
-
-    public int avgDurationMs() {
-        Number value = jdbc.queryForObject(
-                "SELECT IFNULL(AVG(duration_ms), 0) FROM t_call_log WHERE status = 'SUCCESS'",
-                new MapSqlParameterSource(), Number.class);
-        return value == null ? 0 : value.intValue();
-    }
-
-    /** 最近 7 天按天的提问量，缺少的日期补 0，保证前端条形连续。 */
-    public List<DayCount> byDay() {
-        List<DayCount> rows = jdbc.query(
-                "SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS d, COUNT(*) AS c FROM t_message "
-                        + "WHERE role = 'USER' AND status = 'SUCCESS' "
-                        + "AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) "
-                        + "GROUP BY d ORDER BY d ASC",
-                new MapSqlParameterSource(),
-                (rs, i) -> new DayCount(rs.getString("d"), rs.getInt("c")));
-        return rows;
+        Map<String, DayStat> indexed = new LinkedHashMap<>();
+        for (DayStat row : rows) {
+            indexed.put(row.date(), row);
+        }
+        List<DayStat> filled = new ArrayList<>(days);
+        LocalDate today = LocalDate.now();
+        for (int offset = days - 1; offset >= 0; offset--) {
+            String key = today.minusDays(offset).toString();
+            DayStat hit = indexed.get(key);
+            filled.add(hit == null ? new DayStat(key, 0, 0, 0) : hit);
+        }
+        return filled;
     }
 
     /** 学科分布：按知识点命中数聚合；未开启知识点抽取时为空列表（不伪造数据）。 */
-    public List<SubjectCount> bySubject() {
+    public List<SubjectCount> bySubject(Integer days) {
         return jdbc.query(
                 "SELECT kp.subject AS s, COUNT(DISTINCT h.message_id) AS c FROM t_knowledge_hit h "
-                        + "JOIN t_knowledge_point kp ON kp.id = h.kp_id "
-                        + "GROUP BY kp.subject ORDER BY c DESC, s ASC",
-                new MapSqlParameterSource(),
+                        + "JOIN t_knowledge_point kp ON kp.id = h.kp_id"
+                        + filter(days, "h.created_at", false)
+                        + " GROUP BY kp.subject ORDER BY c DESC, s ASC",
+                params(days),
                 (rs, i) -> new SubjectCount(rs.getString("s"), rs.getInt("c")));
+    }
+
+    private int count(String sql, Integer days) {
+        Integer value = jdbc.queryForObject(sql, params(days), Integer.class);
+        return value == null ? 0 : value;
+    }
+
+    private static boolean hasWindow(Integer days) {
+        return days != null && days > 0;
+    }
+
+    /**
+     * 追加窗口条件。自然日口径：起点为 `CURDATE() - (N-1)` 的 00:00，与按天分组的日期边界对齐，
+     * 所以「概览计数」与柱状图各行之和必然相等。
+     *
+     * @param column      时间列，JOIN 场景需带表别名（如 {@code h.created_at}）
+     * @param hasWhereSql 原 SQL 是否已带 WHERE
+     */
+    private static String filter(Integer days, String column, boolean hasWhereSql) {
+        if (!hasWindow(days)) {
+            return "";
+        }
+        return (hasWhereSql ? " AND " : " WHERE ") + column + " >= :since";
+    }
+
+    private static MapSqlParameterSource params(Integer days) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        if (hasWindow(days)) {
+            LocalDate start = LocalDate.now().minusDays(days - 1L);
+            params.addValue("since", Timestamp.valueOf(start.atStartOfDay()));
+        }
+        return params;
     }
 }

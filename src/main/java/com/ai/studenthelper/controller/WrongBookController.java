@@ -4,7 +4,9 @@ import com.ai.studenthelper.application.WrongBookApplicationService;
 import com.ai.studenthelper.common.ApiResponse;
 import com.ai.studenthelper.common.dto.FeedbackResponse;
 import com.ai.studenthelper.common.dto.WrongBookResponse;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,5 +43,12 @@ public class WrongBookController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
         return ApiResponse.ok(service.list(subject, from, to, page, size));
+    }
+
+    /** CR-022：单条错题删除——只删标记行，不动消息、会话与图片。 */
+    @DeleteMapping("/{feedbackId}")
+    public ApiResponse<Map<String, Boolean>> delete(@PathVariable Long feedbackId) {
+        service.delete(feedbackId);
+        return ApiResponse.ok(Map.of("deleted", true));
     }
 }

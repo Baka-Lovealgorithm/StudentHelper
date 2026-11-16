@@ -9,7 +9,6 @@ import com.ai.studenthelper.domain.enums.S2Feature;
 import com.ai.studenthelper.infra.persistence.MemoryRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -20,10 +19,6 @@ import java.util.Set;
  */
 @Service
 public class ProfileApplicationService {
-
-    /** 注入上限：最多 3 条、每条 60 字符，控制 prompt_tokens 增长（AC-201-3）。 */
-    public static final int MAX_INJECTED_ITEMS = 3;
-    public static final int MAX_ITEM_CHARS = 60;
 
     private static final Set<String> KINDS = Set.of("PREFERENCE", "FACT", "SUMMARY");
 
@@ -50,7 +45,8 @@ public class ProfileApplicationService {
         }
         Map<String, Object> data = store.read();
         patch.forEach((key, value) -> {
-            if (key != null && !key.isBlank() && !"optionalSections".equals(key)) {
+            // CR-024：可选输出段落已退役，不再需要对 profile_json 里的 optionalSections 做特殊保护
+            if (key != null && !key.isBlank()) {
                 data.put(key, value);
             }
         });
@@ -91,30 +87,5 @@ public class ProfileApplicationService {
     public void disableMemory(Long id) {
         features.requireEnabled(S2Feature.MEMORY);
         memoryRepository.disable(id);
-    }
-
-    /** 供 S2PromptAugmenter 使用：关闭态返回空，开启态截断后注入。 */
-    public List<String> enabledMemorySnippets() {
-        if (!features.isEnabled(S2Feature.MEMORY)) {
-            return List.of();
-        }
-        List<String> rows = memoryRepository.findEnabledContents(MAX_INJECTED_ITEMS);
-        List<String> out = new ArrayList<>();
-        for (String row : rows) {
-            if (out.size() >= MAX_INJECTED_ITEMS) {
-                break; // 双保险：即使 Repository 返回超量，注入条数也不越界
-            }
-            if (row == null) {
-                continue;
-            }
-            String text = row.trim().replace('\n', ' ').replace('\r', ' ');
-            if (text.length() > MAX_ITEM_CHARS) {
-                text = text.substring(0, MAX_ITEM_CHARS);
-            }
-            if (!text.isEmpty()) {
-                out.add(text);
-            }
-        }
-        return out;
     }
 }

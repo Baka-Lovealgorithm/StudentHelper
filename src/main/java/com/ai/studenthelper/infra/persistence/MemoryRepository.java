@@ -57,18 +57,6 @@ public class MemoryRepository {
     }
 
     /** 最近 N 条启用记忆，返回时按时间正序，保证注入顺序稳定。 */
-    public List<String> findEnabledContents(int limit) {
-        List<String> rows = jdbc.queryForList(
-                "SELECT content FROM t_memory WHERE enabled = 1 "
-                        + "ORDER BY created_at DESC, id DESC LIMIT " + Math.max(1, limit),
-                new MapSqlParameterSource(), String.class);
-        List<String> out = new ArrayList<>();
-        for (int i = rows.size() - 1; i >= 0; i--) {
-            out.add(rows.get(i));
-        }
-        return out;
-    }
-
     public void disable(Long id) {
         jdbc.update("UPDATE t_memory SET enabled = 0 WHERE id = :id",
                 new MapSqlParameterSource("id", id));

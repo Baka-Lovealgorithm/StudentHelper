@@ -47,4 +47,10 @@ public class WrongBookRepository {
                 rs.getTimestamp("created_at") == null ? null
                         : rs.getTimestamp("created_at").toLocalDateTime()));
     }
+
+    /** CR-022：删除单条错题标记，返回受影响行数（0 = 不存在或不是 WRONG）。 */
+    public int delete(Long feedbackId) {
+        return jdbc.update("DELETE FROM t_message_feedback WHERE id = :id AND kind = 'WRONG'",
+                new MapSqlParameterSource("id", feedbackId));
+    }
 }

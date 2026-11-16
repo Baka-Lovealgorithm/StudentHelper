@@ -45,6 +45,16 @@ public class S2FeatureService {
         return repository.isEnabled(feature.key());
     }
 
+    /**
+     * CR-043：读一次全量开关，供一次请求内复用。
+     *
+     * <p>与 {@link #isEnabled} 的区别只在于「读几次库」：读侧走快照，写侧仍逐次现读，
+     * 保证关闭开关后越权写立刻被拒。</p>
+     */
+    public FeatureSnapshot snapshot() {
+        return new FeatureSnapshot(repository.findAll());
+    }
+
     /** 关闭态统一拒绝，返回 E3004，避免静默写入 S2 数据。 */
     public void requireEnabled(S2Feature feature) {
         if (!isEnabled(feature)) {
