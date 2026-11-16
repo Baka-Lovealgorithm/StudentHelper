@@ -1,9 +1,5 @@
 package com.ai.studenthelper.application;
 
-import com.ai.studenthelper.agent.ChatContextAssembler;
-import com.ai.studenthelper.agent.KnowledgeExtractor;
-import com.ai.studenthelper.agent.SolutionSectionParser;
-import com.ai.studenthelper.agent.S2PromptAugmenter;
 import com.ai.studenthelper.agent.SolverAgentFactory;
 import com.ai.studenthelper.common.ErrorCode;
 import com.ai.studenthelper.common.dto.ChatCommand;
@@ -14,6 +10,7 @@ import com.ai.studenthelper.infra.log.CallLogRecorder;
 import com.ai.studenthelper.infra.log.RawAnswerArchiver;
 import com.ai.studenthelper.infra.model.ModelConfigResolver;
 import com.ai.studenthelper.infra.persistence.MessageRepository;
+import com.ai.studenthelper.infra.render.DiagramRenderer;
 import com.ai.studenthelper.infra.storage.ImageStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,24 +43,21 @@ class ChatApplicationServiceFailureTest {
     @Mock private ImageStorage imageStorage;
     @Mock private ModelConfigResolver configResolver;
     @Mock private SolverAgentFactory agentFactory;
-    @Mock private ChatContextAssembler contextAssembler;
-    @Mock private SolutionSectionParser parser;
     @Mock private CallLogRecorder logRecorder;
     @Mock private RawAnswerArchiver rawAnswerArchiver;
-    @Mock private KnowledgeExtractor knowledgeExtractor;
     @Mock private SolutionStreamSink sink;
-    @Mock private S2PromptAugmenter promptAugmenter;
+    @Mock private SubjectSkillApplicationService subjectSkills;
+    @Mock private SkillApplicationService skillService;
+    @Mock private ChatTurnPreparer preparer;
+    @Mock private AnswerFinalizer finalizer;
 
     private ChatApplicationService service;
 
     @BeforeEach
     void setUp() {
         service = new ChatApplicationService(sessionService, messageRepository, imageStorage,
-                configResolver, agentFactory, contextAssembler, parser, logRecorder,
-                rawAnswerArchiver, knowledgeExtractor, new AppProperties(), promptAugmenter);
-        org.mockito.Mockito.lenient()
-                .when(promptAugmenter.augment(org.mockito.ArgumentMatchers.anyString()))
-                .thenAnswer(inv -> inv.getArgument(0));
+                configResolver, agentFactory, rawAnswerArchiver, logRecorder, new AppProperties(),
+                subjectSkills, skillService, preparer, finalizer, new DiagramRenderer(new AppProperties()));
     }
 
     @Test
@@ -71,7 +65,7 @@ class ChatApplicationServiceFailureTest {
         ChatCommand command = new ChatCommand(1L, "题目：简述栈的特点", null, 0, List.of());
         when(sessionService.requireSession(1L)).thenReturn(new Session());
         when(configResolver.resolveForSession(1L)).thenReturn(new ModelConfigResolver.ResolvedModelConfig(
-                3L, "http://127.0.0.1:1", "key", "stub", false, true, null));
+                3L, "http://127.0.0.1:1", "key", "stub", false, true, null, false));
         // 第一次 save 是用户消息落库，第二次是 handleFailure 里回写 FAILED 状态
         when(messageRepository.save(any(Message.class)))
                 .thenAnswer(invocation -> {
@@ -80,7 +74,8 @@ class ChatApplicationServiceFailureTest {
                     return m;
                 })
                 .thenThrow(new IllegalStateException("status save failed"));
-        when(messageRepository.findBySessionId(1L)).thenThrow(new IllegalStateException("db down"));
+        when(preparer.prepare(any(), any(), any(), any()))
+                .thenThrow(new IllegalStateException("db down"));
         doThrow(new IllegalStateException("call log failed")).when(logRecorder)
                 .record(any(), any(), any(), any(), anyLong(), any(), any());
 

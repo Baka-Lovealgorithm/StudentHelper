@@ -12,7 +12,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -41,33 +40,16 @@ class ProfileApplicationServiceTest {
         verify(memoryRepository, never()).insert(any(), any(), any());
     }
 
-    @Test
-    void injectedMemoriesAreCappedAndTruncated() {
-        when(features.isEnabled(S2Feature.MEMORY)).thenReturn(true);
-        when(memoryRepository.findEnabledContents(3)).thenReturn(List.of(
-                "A".repeat(120), "偏好二", "偏好三", "偏好四"));
-        List<String> snippets = service.enabledMemorySnippets();
-        assertEquals(3, snippets.size());
-        assertEquals(60, snippets.get(0).length());
-        assertEquals("偏好三", snippets.get(2));
-    }
+
 
     @Test
-    void disabledFeatureInjectsNothing() {
-        when(features.isEnabled(S2Feature.MEMORY)).thenReturn(false);
-        assertTrue(service.enabledMemorySnippets().isEmpty());
-        verifyNoInteractions(memoryRepository);
-    }
-
-    @Test
-    void updateProfileKeepsOptionalSectionKey() {
+    void updateProfileWritesFields() {
         Map<String, Object> existing = new LinkedHashMap<>();
         existing.put("depth", "通俗");
-        existing.put("optionalSections", Map.of("code", true));
         when(store.read()).thenReturn(existing);
-        service.updateProfile(Map.of("subject", "数据结构", "optionalSections", "SHOULD_BE_IGNORED"));
+        service.updateProfile(Map.of("subject", "数据结构"));
         verify(store).write(argThat(data -> "数据结构".equals(data.get("subject"))
-                && data.get("optionalSections") instanceof Map));
+                && "通俗".equals(data.get("depth"))));
     }
 
     @Test
@@ -76,4 +58,6 @@ class ProfileApplicationServiceTest {
         verify(store).clear();
         verify(memoryRepository).disableAll();
     }
+
+
 }

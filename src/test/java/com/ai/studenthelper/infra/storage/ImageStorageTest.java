@@ -53,4 +53,22 @@ class ImageStorageTest {
         assertThrows(IllegalArgumentException.class,
                 () -> storage().save(7L, "x".getBytes(StandardCharsets.UTF_8), "png/../../../../evil"));
     }
+
+    /** AC-502-5：只读解析拒绝路径穿越、非白名单扩展名与不存在的文件。 */
+    @Test
+    void resolveRejectsTraversalAndNonImageNames() throws Exception {
+        ImageStorage storage = storage();
+        String saved = storage.save(11L, "img".getBytes(StandardCharsets.UTF_8), "png");
+        String fileName = saved.substring(saved.indexOf('/') + 1);
+
+        assertTrue(storage.resolve(11L, fileName).isPresent());
+        assertTrue(storage.resolve(11L, fileName + ".png").isEmpty(), "重复扩展名视为不存在");
+
+        assertFalse(storage.resolve(11L, "../10/secret.png").isPresent(), "拒绝目录穿越");
+        assertFalse(storage.resolve(11L, "a/b.png").isPresent(), "文件名不允许带路径分隔符");
+        assertFalse(storage.resolve(11L, "notes.txt").isPresent(), "非图片扩展名拒绝");
+        assertFalse(storage.resolve(11L, null).isPresent());
+        assertFalse(storage.resolve(null, fileName).isPresent());
+        assertFalse(storage.resolve(12L, fileName).isPresent(), "跨会话目录视为不存在");
+    }
 }

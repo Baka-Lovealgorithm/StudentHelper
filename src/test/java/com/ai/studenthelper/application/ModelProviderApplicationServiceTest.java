@@ -42,7 +42,7 @@ class ModelProviderApplicationServiceTest {
     }
 
     private static ModelProviderRepository.ModelRow model(long id, long pid, String name, boolean isDefault) {
-        return new ModelProviderRepository.ModelRow(id, pid, name, true, true, null, isDefault);
+        return new ModelProviderRepository.ModelRow(id, pid, name, true, true, null, isDefault, false);
     }
 
     @Test
@@ -93,16 +93,16 @@ class ModelProviderApplicationServiceTest {
         when(repository.findDefaultModelId()).thenReturn(7L);
         when(repository.modelNameExists(eq(1L), eq("model-a"), isNull())).thenReturn(true);
         when(repository.modelNameExists(eq(1L), eq("model-b"), isNull())).thenReturn(false);
-        when(repository.insertModel(eq(1L), eq("model-b"), eq(false), eq(true), isNull(), eq(false)))
-                .thenReturn(8L);
+        when(repository.insertModel(eq(1L), eq("model-b"), eq(false), eq(true), isNull(), eq(false),
+                eq(false))).thenReturn(8L);
 
         var added = service.addModels(1L,
-                new ModelEntryRequest(null, List.of("model-a", "model-b"), null, null, null));
+                new ModelEntryRequest(null, List.of("model-a", "model-b"), null, null, null, null));
 
         assertEquals(1, added.size());
         assertEquals("model-b", added.get(0).modelName());
         verify(repository, times(1)).insertModel(anyLong(), anyString(), anyBoolean(), anyBoolean(),
-                any(), anyBoolean());
+                any(), anyBoolean(), anyBoolean());
     }
 
     @Test
@@ -112,7 +112,7 @@ class ModelProviderApplicationServiceTest {
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.addModels(1L,
-                        new ModelEntryRequest("dup-model", null, true, true, null)));
+                        new ModelEntryRequest("dup-model", null, true, true, null, null)));
         assertEquals(ErrorCode.E1004, ex.getErrorCode());
     }
 
@@ -123,12 +123,12 @@ class ModelProviderApplicationServiceTest {
         when(repository.modelNameExists(1L, "old-name", 3L)).thenReturn(false);
 
         var response = service.updateModel(1L, 3L,
-                new ModelEntryRequest(null, null, false, null, null));
+                new ModelEntryRequest(null, null, false, null, null, null));
 
         assertEquals("old-name", response.modelName());
         assertFalse(response.visionSupported(), "只覆盖显式传入的 visionSupported");
         assertTrue(response.streamSupported(), "未传入的 streamSupported 保持原值");
-        verify(repository).updateModel(3L, "old-name", false, true, null);
+        verify(repository).updateModel(3L, "old-name", false, true, null, false);
     }
 
     @Test

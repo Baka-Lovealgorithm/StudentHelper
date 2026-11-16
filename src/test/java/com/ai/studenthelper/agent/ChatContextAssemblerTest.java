@@ -71,6 +71,33 @@ class ChatContextAssemblerTest {
         assertEquals("new", result.get(12).getTextContent().substring(0, 3).isEmpty() ? "" : "new");
     }
 
+    // TCR-040 / AC-401-8：压缩开关开启（fullWindow=true）时不再套 12 条硬截断，
+    // 13~30 条区间的历史必须全部带入，不能出现「既不压缩也不带入」的丢弃空档。
+    @Test
+    void fullWindowKeepsAllHistoryWithoutTwelveMessageCap() {
+        for (int size : new int[]{1, 12, 13, 29, 30}) {
+            List<Message> history = new ArrayList<>();
+            for (int i = 0; i < size; i++) {
+                history.add(message("USER", "q" + i, "SUCCESS"));
+            }
+            List<Msg> result = assembler.assemble(history, null, true,
+                    List.of(), "本轮", null, List.of());
+            assertEquals(size + 1, result.size(), "fullWindow 下应带入全部 " + size + " 条历史");
+            assertEquals("q0", result.get(0).getTextContent(), size + " 条时第一条不应被丢弃");
+        }
+    }
+
+    @Test
+    void summaryIsPrependedAsSystemMessage() {
+        List<Message> history = List.of(message("USER", "旧问", "SUCCESS"));
+        List<Msg> result = assembler.assemble(history, "之前的摘要", true,
+                List.of(), "本轮", null, List.of());
+        assertEquals(MsgRole.SYSTEM, result.get(0).getRole());
+        assertTrue(result.get(0).getTextContent().contains("【历史对话摘要】"));
+        assertTrue(result.get(0).getTextContent().contains("之前的摘要"));
+        assertEquals(3, result.size()); // 摘要 + 1 条历史 + 本轮
+    }
+
     @Test
     void imageBecomesBase64SourceBlock() {
         byte[] bytes = "fake-bytes".getBytes(StandardCharsets.UTF_8);

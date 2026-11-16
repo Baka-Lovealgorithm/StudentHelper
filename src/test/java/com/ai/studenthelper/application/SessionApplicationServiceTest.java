@@ -9,7 +9,6 @@ import com.ai.studenthelper.infra.persistence.MessageFeedbackRepository;
 import com.ai.studenthelper.infra.persistence.KnowledgePointRepository;
 import com.ai.studenthelper.infra.persistence.MessageRepository;
 import com.ai.studenthelper.infra.persistence.ModelProviderRepository;
-import com.ai.studenthelper.infra.persistence.PracticeRepository;
 import com.ai.studenthelper.infra.persistence.StepUnlockRepository;
 import com.ai.studenthelper.infra.persistence.SessionRepository;
 import com.ai.studenthelper.infra.storage.ImageStorage;
@@ -25,6 +24,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,11 +41,11 @@ class SessionApplicationServiceTest {
     @Mock
     private KnowledgePointRepository knowledgePointRepository;
     @Mock
-    private PracticeRepository practiceRepository;
-    @Mock
     private StepUnlockRepository stepUnlockRepository;
     @Mock
     private ModelProviderRepository modelProviderRepository;
+    @Mock
+    private com.ai.studenthelper.infra.memory.SessionSummaryStore sessionSummaryStore;
 
     private SessionApplicationService service;
 
@@ -53,7 +53,8 @@ class SessionApplicationServiceTest {
     void setUp() {
         service = new SessionApplicationService(sessionRepository, messageRepository,
                 feedbackRepository, imageStorage, knowledgePointRepository,
-                practiceRepository, stepUnlockRepository, modelProviderRepository);
+                stepUnlockRepository, modelProviderRepository,
+                sessionSummaryStore);
     }
 
     @Test
@@ -115,6 +116,8 @@ class SessionApplicationServiceTest {
         verify(messageRepository).deleteBySessionId(4L);
         verify(sessionRepository).deleteById(4L);
         verify(imageStorage).deleteSessionDir(4L);
+        // TCR-040 / AC-401-10：摘要缓存随会话清理，避免孤儿文件
+        verify(sessionSummaryStore).delete(4L);
     }
 
     @Test
@@ -216,7 +219,7 @@ class SessionApplicationServiceTest {
         session.setUpdatedAt(originalUpdatedAt);
         when(sessionRepository.findById(6L)).thenReturn(Optional.of(session));
         when(modelProviderRepository.findModel(42L)).thenReturn(Optional.of(
-                new ModelProviderRepository.ModelRow(42L, 1L, "vision-model", true, true, null, false)));
+                new ModelProviderRepository.ModelRow(42L, 1L, "vision-model", true, true, null, false, false)));
         when(sessionRepository.save(any(Session.class))).thenAnswer(i -> i.getArgument(0));
 
         var response = service.setModel(6L, 42L);
@@ -235,6 +238,48 @@ class SessionApplicationServiceTest {
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.setModel(6L, 999L));
         assertEquals(ErrorCode.E3003, ex.getErrorCode());
+        verify(sessionRepository, never()).save(any(Session.class));
+    }
+
+    // ===== CR-033：模型自动标题（AC-104-12~13） =====
+
+    @Test
+    void updateAutoTitleWritesOnlyDefaultTitleAndKeepsUpdatedAt() {
+        Session session = new Session();
+        session.setId(21L);
+        session.setTitle("新会话");
+        LocalDateTime originalUpdatedAt = LocalDateTime.of(2026, 11, 12, 9, 0);
+        session.setUpdatedAt(originalUpdatedAt);
+        when(sessionRepository.findById(21L)).thenReturn(Optional.of(session));
+        when(sessionRepository.save(any(Session.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.updateAutoTitle(21L, "  循环冗余校验 CRC  ");
+
+        assertEquals("循环冗余校验 CRC", session.getTitle());
+        assertEquals(originalUpdatedAt, session.getUpdatedAt(), "自动标题不应改变列表排序");
+        verify(sessionRepository).save(session);
+    }
+
+    @Test
+    void updateAutoTitleNeverOverwritesManualTitle() {
+        Session session = new Session();
+        session.setId(22L);
+        session.setTitle("我的期末复习");
+        when(sessionRepository.findById(22L)).thenReturn(Optional.of(session));
+
+        service.updateAutoTitle(22L, "模型生成的标题");
+
+        assertEquals("我的期末复习", session.getTitle(), "手动重命名过的标题永不被覆盖");
+        verify(sessionRepository, never()).save(any(Session.class));
+    }
+
+    @Test
+    void updateAutoTitleIgnoresBlankTitle() {
+        // 空白 / null 标题在触达仓库前直接返回，无需桩 findById
+        service.updateAutoTitle(23L, "   ");
+        service.updateAutoTitle(23L, null);
+
+        verify(sessionRepository, never()).findById(anyLong());
         verify(sessionRepository, never()).save(any(Session.class));
     }
 }

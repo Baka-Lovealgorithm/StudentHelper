@@ -5,51 +5,86 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** DD-02：抽取解析、两级结构与防幻觉过滤，不调用真实模型。 */
+/** CR-025：知识点随解答产出——解析第 2 段的「大 > 小」列表，上限 3 项，不调用模型。 */
 class KnowledgeExtractorTest {
 
     @Test
-    void sectionKnowledgeExtractsOnlySectionTwo() {
-        String answer = """
-                ## ① 题目理解
-                复述题意
-                ## ② 涉及知识点
-                栈的性质、栈的顺序存储、二叉树的遍历
-                ## ③ 解题思路
-                分析
+    void parsesTwoLevelListKeepingOrder() {
+        String section = """
+                - 栈 > 后进先出
+                - 栈 > 合法出栈序列
+                二叉树 → 遍历
                 """;
-        String section = KnowledgeExtractor.sectionKnowledge(answer);
-        assertEquals("栈的性质、栈的顺序存储、二叉树的遍历", section);
-    }
-
-    @Test
-    void parseRefsAcceptsTwoLevelJsonAndDropsFencedWrapper() {
-        String section = "栈的性质、栈的顺序存储";
-        String raw = "```json\n[{\"major\":\"栈\",\"minor\":\"栈的性质\"},"
-                + "{\"major\":\"栈\",\"minor\":\"栈的顺序存储\"}]\n```";
-        List<KnowledgeExtractor.KpRef> refs = KnowledgeExtractor.parseRefs(raw, section);
-        assertEquals(2, refs.size());
+        List<KnowledgeExtractor.KpRef> refs = KnowledgeExtractor.parseSection(section);
+        assertEquals(3, refs.size());
         assertEquals("栈", refs.get(0).major());
-        assertEquals("栈的性质", refs.get(0).minor());
+        assertEquals("后进先出", refs.get(0).minor());
+        assertEquals("二叉树", refs.get(2).major());
+        assertEquals("遍历", refs.get(2).minor());
     }
 
     @Test
-    void parseRefsDropsHallucinatedAndInvalidItems() {
-        String section = "栈的性质";
-        String raw = "[{\"major\":\"栈\",\"minor\":\"栈的性质\"},"
-                + "{\"major\":\"图论\",\"minor\":\"最短路径\"},"
-                + "{\"major\":null,\"minor\":\"x\"}]";
-        List<KnowledgeExtractor.KpRef> refs = KnowledgeExtractor.parseRefs(raw, section);
-        assertEquals(1, refs.size(), "原文未出现的知识点必须丢弃（NFR-104）");
+    void capsAtThreeItems() {
+        String section = """
+                栈 > 后进先出
+                队列 > 先进先出
+                二叉树 > 遍历
+                图 > 最短路径
+                排序 > 稳定性
+                """;
+        List<KnowledgeExtractor.KpRef> refs = KnowledgeExtractor.parseSection(section);
+        assertEquals(KnowledgeExtractor.MAX_ITEMS, refs.size(), "每轮最多 3 个（CR-025）");
+        assertTrue(refs.stream().noneMatch(r -> "图".equals(r.major())), "第 4 项起丢弃");
+    }
+
+    @Test
+    void dedupesSamePairAndDropsPlaceholders() {
+        String section = """
+                栈 > 后进先出
+                **栈 > 后进先出**
+                无
+                暂无
+                """;
+        List<KnowledgeExtractor.KpRef> refs = KnowledgeExtractor.parseSection(section);
+        assertEquals(1, refs.size());
+    }
+
+    @Test
+    void longSentenceWithoutSeparatorIsDropped() {
+        String section = """
+                本题主要考查栈的后进先出性质以及合法出栈序列的判定方法
+                栈 > 后进先出
+                """;
+        List<KnowledgeExtractor.KpRef> refs = KnowledgeExtractor.parseSection(section);
+        assertEquals(1, refs.size());
         assertEquals("栈", refs.get(0).major());
     }
 
     @Test
-    void malformedJsonOrEmptyArrayIsSafe() {
-        assertTrue(KnowledgeExtractor.parseRefs("not json", "栈").isEmpty());
-        assertTrue(KnowledgeExtractor.parseRefs("[]", "栈").isEmpty());
-        assertTrue(KnowledgeExtractor.parseRefs(null, "栈").isEmpty());
+    void colonAndBareLineFallbacks() {
+        List<KnowledgeExtractor.KpRef> colon = KnowledgeExtractor.parseSection("洛必达法则：0/0 型极限");
+        assertEquals("洛必达法则", colon.get(0).major());
+        assertEquals("0/0 型极限", colon.get(0).minor());
+
+        List<KnowledgeExtractor.KpRef> bare = KnowledgeExtractor.parseSection("时间复杂度");
+        assertEquals("时间复杂度", bare.get(0).major());
+        assertNull(bare.get(0).minor());
+    }
+
+    @Test
+    void emptyOrNullSectionIsSafe() {
+        assertTrue(KnowledgeExtractor.parseSection(null).isEmpty());
+        assertTrue(KnowledgeExtractor.parseSection("").isEmpty());
+        assertTrue(KnowledgeExtractor.parseSection("   \n  \n").isEmpty());
+    }
+
+    @Test
+    void stripsListMarkersAndTrailingPunctuation() {
+        assertEquals("栈 > 后进先出", KnowledgeExtractor.clean("1. 栈 > 后进先出。"));
+        assertEquals("栈 > 后进先出", KnowledgeExtractor.clean("* 栈 > 后进先出；"));
+        assertEquals("栈 > 后进先出", KnowledgeExtractor.clean("（2）栈 > 后进先出，"));
     }
 }

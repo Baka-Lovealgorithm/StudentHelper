@@ -55,6 +55,42 @@ class SkillApplicationServiceTest {
         assertEquals("有内容", snippets.get(0)[0]);
     }
 
+    /** CR-026：清单只含启用且非空正文技能的名称与描述，超长描述截断 200。 */
+    @Test
+    void catalogListsNameAndDescriptionOnly() {
+        when(features.isEnabled(S2Feature.SKILL)).thenReturn(true);
+        when(repository.findEnabled(SkillApplicationService.MAX_CATALOG_SKILLS)).thenReturn(List.of(
+                new SkillResponse(1L, "甲", "d".repeat(260), "正文甲", true, LocalDateTime.now()),
+                new SkillResponse(2L, "空正文", "说明", "   ", true, LocalDateTime.now())));
+        List<String[]> catalog = service.catalog();
+        assertEquals(1, catalog.size());
+        assertEquals("甲", catalog.get(0)[0]);
+        assertEquals(200, catalog.get(0)[1].length());
+        assertFalse(catalog.get(0)[1].contains("正文甲"), "清单不含技能正文");
+    }
+
+    /** CR-026：开关关闭时清单为空且不读库。 */
+    @Test
+    void catalogIsEmptyWhenDisabled() {
+        when(features.isEnabled(S2Feature.SKILL)).thenReturn(false);
+        assertTrue(service.catalog().isEmpty());
+        verifyNoInteractions(repository);
+    }
+
+    /** CR-026：skill_get 只读启用技能，正文沿用 800 字上限；未命中返回 null。 */
+    @Test
+    void contentForReadsEnabledSkillAndTruncates() {
+        when(features.isEnabled(S2Feature.SKILL)).thenReturn(true);
+        when(repository.findEnabledByName("长技能")).thenReturn(Optional.of(
+                new SkillResponse(5L, "长技能", null, "y".repeat(1200), true, LocalDateTime.now())));
+        when(repository.findEnabledByName("停用")).thenReturn(Optional.empty());
+        assertEquals(SkillApplicationService.MAX_INJECTED_CHARS, service.contentFor("长技能").length());
+        assertNull(service.contentFor("停用"));
+        assertNull(service.contentFor(null));
+        when(features.isEnabled(S2Feature.SKILL)).thenReturn(false);
+        assertNull(service.contentFor("长技能"), "开关关闭时不读入技能正文");
+    }
+
     @Test
     void emptyContentIsRejectedOnCreate() {
         doNothing().when(features).requireEnabled(S2Feature.SKILL);

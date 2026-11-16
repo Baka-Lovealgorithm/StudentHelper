@@ -75,4 +75,36 @@ class WrongBookApplicationServiceTest {
         assertTrue(service.list("数据结构", null, null, 1, 10).isEmpty());
         verify(wrongBookRepository).query(eq("数据结构"), any(), any(), eq(1), eq(10));
     }
+
+    // CR-022 / AC-202-5：单条删除只删标记行，语义与错误码固定。
+
+    @Test
+    void deleteRemovesSingleMark() {
+        when(wrongBookRepository.delete(77L)).thenReturn(1);
+        service.delete(77L);
+        verify(wrongBookRepository).delete(77L);
+    }
+
+    @Test
+    void deleteMissingRowReturnsE1005() {
+        when(wrongBookRepository.delete(88L)).thenReturn(0);
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.delete(88L));
+        assertEquals(com.ai.studenthelper.common.ErrorCode.E1005, ex.getErrorCode());
+    }
+
+    @Test
+    void deleteRejectedWhenFeatureDisabled() {
+        doThrow(new BusinessException(com.ai.studenthelper.common.ErrorCode.E3004, "该功能当前已关闭"))
+                .when(features).requireEnabled(S2Feature.WRONG_BOOK);
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.delete(99L));
+        assertEquals(com.ai.studenthelper.common.ErrorCode.E3004, ex.getErrorCode());
+        verifyNoInteractions(wrongBookRepository);
+    }
+
+    @Test
+    void deleteRejectsInvalidId() {
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.delete(0L));
+        assertEquals(com.ai.studenthelper.common.ErrorCode.E1004, ex.getErrorCode());
+        verifyNoInteractions(wrongBookRepository);
+    }
 }
